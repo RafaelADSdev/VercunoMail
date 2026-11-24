@@ -4,18 +4,18 @@ import { dirname, join } from "node:path";
 import test, { after } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
+import { getTableName } from "drizzle-orm";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const directory = mkdtempSync(join(root, "node_modules", "image-response-test-"));
 const mocks = {
 	"@/db": "export function getDb() { return globalThis.imageResponseTest.db; }",
 	"@/lib/cloudflare": "export async function getEnvAsync() { return globalThis.imageResponseTest.env; }",
-	"@/lib/branding/service": "export const APP_SETTINGS_ID = 'app';",
-	"@/lib/licenses/service": "export async function getLicenseEntitlements() { return { canCustomizeBranding: globalThis.imageResponseTest.custom }; }",
 };
 await build({
 	stdin: {
 		contents: `export { getAvatarImageResponse } from './src/lib/avatar-images.ts';
+			export { getBranding } from './src/lib/branding/service.ts';
 			export { GET as getBrandingIcon } from './src/app/api/branding/icon/route.ts';`,
 		resolveDir: root,
 		sourcefile: "image-response-test.ts",
@@ -27,7 +27,7 @@ await build({
 		builder.onLoad({ filter: /.*/, namespace: "mock" }, ({ path }) => ({ contents: mocks[path], loader: "js" }));
 	} }],
 });
-const { getAvatarImageResponse, getBrandingIcon } = await import(pathToFileURL(join(directory, "entry.mjs")).href);
+const { getAvatarImageResponse, getBranding, getBrandingIcon } = await import(pathToFileURL(join(directory, "entry.mjs")).href);
 after(() => {
 	rmSync(directory, { recursive: true, force: true });
 	delete globalThis.imageResponseTest;
@@ -62,11 +62,20 @@ test("expired avatar revalidation retains ETag and refreshes the private freshne
 	assert.equal(await response.text(), "");
 });
 
-function brandingState({ custom = false, iconKey = null, assetStatus = 200, object = null } = {}) {
-	const query = { select() { return this; }, from() { return this; }, where() { return this; }, async limit() { return [{ iconKey }]; } };
+function brandingState({ custom = false, selfHosted = false, iconKey = null, assetStatus = 200, object = null } = {}) {
+	const license = { plan: custom ? "pro" : "community", state: custom ? "active" : "inactive", features: "[]" };
+	const settings = { appName: "Vercuno Equipe", iconKey };
+	const db = { select() {
+		return { from(table) {
+			return { where() { return this; }, async limit() {
+				return [getTableName(table) === "license_settings" ? license : settings];
+			} };
+		} };
+	} };
 	globalThis.imageResponseTest = {
-		custom, db: query,
+		db,
 		env: {
+			MAILFLARE_RUNTIME: selfHosted ? "node" : undefined,
 			ASSETS: { async fetch() { return new Response("packaged-icon", {
 				status: assetStatus,
 				headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=0, must-revalidate", ETag: '"packaged-etag"' },
@@ -74,8 +83,20 @@ function brandingState({ custom = false, iconKey = null, assetStatus = 200, obje
 			BUCKET: { async get() { return object; } },
 		},
 	};
+	return globalThis.imageResponseTest.env;
 }
 const iconRequest = () => new Request("https://mail.test/api/branding/icon");
+
+test("the self-hosted edition uses saved branding without a commercial license", async () => {
+	const object = { body: "custom-icon", httpMetadata: { contentType: "image/webp" } };
+	const localEnv = brandingState({ selfHosted: true, iconKey: "custom", object });
+	assert.deepEqual(await getBranding(localEnv), { appName: "Vercuno Equipe", hasCustomIcon: true, canCustomizeBranding: true });
+	assert.equal(await (await getBrandingIcon(iconRequest())).text(), "custom-icon");
+
+	const workerEnv = brandingState({ iconKey: "custom", object });
+	assert.equal((await getBranding(workerEnv)).canCustomizeBranding, false);
+	assert.equal(await (await getBrandingIcon(iconRequest())).text(), "packaged-icon");
+});
 
 test("default branding icon overrides revalidation-only asset headers for unlicensed and licensed installs", async () => {
 	for (const custom of [false, true]) {

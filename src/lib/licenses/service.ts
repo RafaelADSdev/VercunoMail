@@ -54,21 +54,28 @@ export async function getLicenseStatus(env: CloudflareEnv): Promise<LicenseStatu
 }
 
 export async function getLicenseEntitlements(env: CloudflareEnv): Promise<LicenseEntitlements> {
-	// The Vercuno installation provisions personal accounts on its own server.
-	const localAccounts = isNodeRuntime(env);
+	// The self-hosted Vercuno edition manages its own branding and personal accounts.
+	const selfHosted = isNodeRuntime(env);
 	try {
 		const status = await getLicenseStatus(env);
 		// Pro adds accounts up to its seat limit; Team is unlimited and also unlocks shared mailboxes.
 		return {
 			plan: status.plan,
-			canCustomizeBranding: status.active,
-			canManageAccounts: localAccounts || status.active,
+			canCustomizeBranding: selfHosted || status.active,
+			canManageAccounts: selfHosted || status.active,
 			canShareMailboxes: status.active && status.plan === "team",
-			accountSeatLimit: localAccounts ? null : status.seatLimit,
+			accountSeatLimit: selfHosted ? null : status.seatLimit,
 			canForwardEmail: status.active,
 		};
 	} catch {
-		return { plan: "community", canCustomizeBranding: false, canManageAccounts: localAccounts, canShareMailboxes: false, accountSeatLimit: localAccounts ? null : 0, canForwardEmail: false };
+		return {
+			plan: "community",
+			canCustomizeBranding: selfHosted,
+			canManageAccounts: selfHosted,
+			canShareMailboxes: false,
+			accountSeatLimit: selfHosted ? null : 0,
+			canForwardEmail: false,
+		};
 	}
 }
 
