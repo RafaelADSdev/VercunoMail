@@ -40,6 +40,7 @@ export default function MailboxesPage() {
 	const qc = useQueryClient();
 	const router = useRouter();
 	const base = getMailboxesBase(usePathname());
+	const managementView = base === "/mailboxes";
 	const [displayName, setDisplayName] = useState("");
 	const [localPart, setLocalPart] = useState("");
 	const [domainId, setDomainId] = useState("");
@@ -86,9 +87,9 @@ export default function MailboxesPage() {
 	});
 
 	const mailboxes = useQuery({
-		queryKey: ["mailboxes"],
+		queryKey: ["mailboxes", managementView ? "management" : "personal"],
 		queryFn: async () => {
-			const res = await authFetch("/api/mailboxes");
+			const res = await authFetch(managementView ? "/api/mailboxes?scope=management" : "/api/mailboxes");
 			return (await res.json()) as MailboxesResponse;
 		},
 	});

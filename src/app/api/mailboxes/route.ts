@@ -10,6 +10,7 @@ import { getLicenseEntitlements } from "@/lib/licenses/service";
 import { tracksAccountIdentity } from "@/lib/profile/identity-utils";
 import { mailboxSchema } from "@/lib/validators";
 import { ensureMailboxDomainRouting, getMailboxDomainAddresses } from "@/lib/mailboxes/domain-addresses";
+import { listManagedMailboxSummaries } from "@/lib/mailboxes/settings-access";
 import { normalizeRecipientLocalPart } from "@/lib/email/recipient-address";
 import { ensurePersonalMailbox } from "./utils";
 
@@ -19,14 +20,20 @@ export async function GET(request: Request) {
 	const db = getDb(env);
 	const rows = await ensurePersonalMailbox(env, db, user);
 	const entitlements = await getLicenseEntitlements(env);
+	const accessible = await Promise.all(rows.map(async (mailbox) => ({
+		...mailbox,
+		...(mailbox.userId === user.id && tracksAccountIdentity(mailbox, user.email)
+			? { displayName: user.name, hasAvatar: !!user.avatarKey }
+			: {}),
+		senderAddresses: await getMailboxDomainAddresses(db, mailbox),
+	})));
+	const managementView = new URL(request.url).searchParams.get("scope") === "management";
+	const managed = managementView && entitlements.canManageAccounts
+		? await listManagedMailboxSummaries(db, user)
+		: [];
+	const accessibleIds = new Set(accessible.map((mailbox) => mailbox.id));
 	return NextResponse.json({
-		mailboxes: await Promise.all(rows.map(async (mailbox) => ({
-			...mailbox,
-			...(mailbox.userId === user.id && tracksAccountIdentity(mailbox, user.email)
-				? { displayName: user.name, hasAvatar: !!user.avatarKey }
-				: {}),
-			senderAddresses: await getMailboxDomainAddresses(db, mailbox),
-		}))),
+		mailboxes: [...accessible, ...managed.filter((mailbox) => !accessibleIds.has(mailbox.id))],
 		canCreateShared: user.role === "admin" && entitlements.canShareMailboxes,
 	});
 }

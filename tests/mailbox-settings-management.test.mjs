@@ -17,6 +17,7 @@ await build({
 			export { createSession } from "./src/lib/auth/session.ts";
 			export { getMailboxAccessLevel, listAccessibleMailboxIds, listMailboxSenders } from "./src/lib/mailboxes/access.ts";
 			export { getAuthorizedSenderAddress } from "./src/lib/email/sender.ts";
+			export * as mailboxList from "./src/app/api/mailboxes/route.ts";
 			export * as detail from "./src/app/api/mailboxes/[id]/route.ts";
 			export * as aliases from "./src/app/api/mailboxes/[id]/aliases/route.ts";
 			export * as avatar from "./src/app/api/mailboxes/[id]/avatar/route.ts";
@@ -36,7 +37,7 @@ await build({
 	logLevel: "silent",
 });
 const { SqliteDatabase, applyMigrations, getDb, createSession, getMailboxAccessLevel, listAccessibleMailboxIds, listMailboxSenders,
-	getAuthorizedSenderAddress, detail, aliases, avatar, accountMailboxes } = await import(pathToFileURL(join(directory, "entry.mjs")).href);
+	getAuthorizedSenderAddress, mailboxList, detail, aliases, avatar, accountMailboxes } = await import(pathToFileURL(join(directory, "entry.mjs")).href);
 const context = id => ({ params: Promise.resolve({ id }) });
 
 async function fixture(t, plan = "team") {
@@ -116,6 +117,29 @@ async function fixture(t, plan = "team") {
 	return { sql, env, db: getDb(env), objects, calls, request, read, patch };
 }
 
+test("the administration list includes manageable mailboxes without expanding the personal list", async t => {
+	const f = await fixture(t, "community");
+	f.sql.exec(`INSERT INTO mailboxes (id, user_id, domain_id, local_part, type, created_at)
+		VALUES ('m-manager', 'manager', 'one', 'manager', 'personal', 1)`);
+	const list = async (actor, path) => {
+		const response = await mailboxList.GET(f.request(actor, path));
+		assert.equal(response.status, 200);
+		return (await response.json()).mailboxes.sort((a, b) => a.id.localeCompare(b.id));
+	};
+	const ids = rows => rows.map(row => row.id);
+	const adminPath = "/api/mailboxes?scope=management";
+	assert.deepEqual(ids(await list("primary", "/api/mailboxes")), ["m-owner", "m-shared"]);
+	const managed = await list("primary", adminPath);
+	assert.deepEqual(ids(managed), ["m-manager", "m-other", "m-other-shared", "m-owner", "m-remote", "m-sales", "m-sam", "m-shared"]);
+	const sam = managed.find(row => row.id === "m-sam");
+	assert.equal(sam.displayName, "Sam");
+	assert.equal(sam.hasAvatar, true);
+	assert.equal("permission" in sam, false);
+	assert.equal("signature" in sam, false);
+	assert.deepEqual(ids(await list("manager", adminPath)), ["m-manager", "m-remote", "m-sales", "m-sam"]);
+	assert.deepEqual(ids(await list("sam", adminPath)), ["m-sales", "m-sam"]);
+});
+
 test("primary admin can open indirectly created accounts and edit their primary mailbox identity", async t => {
 	const f = await fixture(t);
 	const listed = await accountMailboxes.GET(f.request("primary", "/api/accounts/sam/mailboxes"), context("sam"));
@@ -191,11 +215,14 @@ test("owners and shared mailbox grants keep their existing settings permissions"
 	assert.equal((await f.patch("sam", "m-shared", { displayName: "Shared Updated" })).status, 200);
 });
 
-test("administrative mailbox settings preserve the account license requirement", async t => {
+test("Workers require an account license for administrative mailbox settings and summaries", async t => {
 	for (const plan of ["community", "pro"]) {
 		const f = await fixture(t, plan);
+		delete f.env.MAILFLARE_RUNTIME;
 		assert.equal((await f.read("primary", "m-sam")).status, plan === "pro" ? 200 : 404);
 		assert.equal((await f.patch("primary", "m-sam", { displayName: "Licensed" })).status, plan === "pro" ? 200 : 404);
+		const response = await mailboxList.GET(f.request("primary", "/api/mailboxes?scope=management"));
+		assert.equal((await response.json()).mailboxes.some(row => row.id === "m-sam"), plan === "pro");
 		assert.equal((await f.patch("sam", "m-sales", { displayName: "My Sales" })).status, 200);
 	}
 });
