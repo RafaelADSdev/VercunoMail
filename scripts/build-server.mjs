@@ -4,8 +4,9 @@ import { build } from "esbuild";
 // pulls in. Next, native modules and network libraries stay external and are
 // resolved from node_modules at runtime.
 await build({
-	entryPoints: ["server/index.ts"],
-	outfile: "dist/server.mjs",
+	entryPoints: { server: "server/index.ts", "provision-accounts": "server/provision-accounts.ts" },
+	outdir: "dist",
+	outExtension: { ".js": ".mjs" },
 	bundle: true,
 	platform: "node",
 	format: "esm",
@@ -17,7 +18,12 @@ await build({
 		// Database drivers, loaded only when DATABASE_URL selects them.
 		"pg", "postgres", "mysql2", "@libsql/client", "@neondatabase/serverless", "@planetscale/database", "@electric-sql/pglite",
 	],
-	alias: { "cloudflare:workers": "./server/runtime/cloudflare-workers.ts" },
+	alias: {
+		"cloudflare:workers": "./server/runtime/cloudflare-workers.ts",
+		"next/server": "next/server.js",
+		"next/headers": "next/headers.js",
+		"next/navigation": "next/navigation.js",
+	},
 	banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
 	define: { "process.env.MAILFLARE_RUNTIME": '"node"' },
 	logLevel: "info",

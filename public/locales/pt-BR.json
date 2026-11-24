@@ -1051,6 +1051,7 @@
 	"admin.section.branding": "Personalize o nome, o ícone e o favicon do aplicativo.",
 	"admin.section.licenses": "Compare as licenças únicas Pro e Team.",
 	"admin.section.accounts": "Adicione e gerencie contas de usuário com uma licença Team.",
+	"admin.section.teamAccounts": "Crie e gerencie contas de e-mail individuais para a sua equipe.",
 	"admin.section.apiKeys": "Gerencie o acesso por API a domínios, contas e caixas de correio.",
 	"admin.section.apiKeysTitle": "Chaves de API de administração",
 	"admin.page.aiUsage": "Uso de IA",
