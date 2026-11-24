@@ -7,6 +7,9 @@ export type B2Config = {
 	endpoint: string;
 	/** Signing region, the second label of the endpoint (us-west-004). */
 	region: string;
+	/** Full path-style endpoint for compatibility services. */
+	url?: URL;
+	sessionToken?: string;
 };
 
 export type StorageStatus = {

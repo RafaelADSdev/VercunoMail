@@ -30,7 +30,7 @@ test("getB2Config needs all four variables and a backblaze endpoint", () => {
 	assert.equal(describeB2Problem({}), null);
 });
 
-test("withStorage swaps BUCKET only when B2 is configured", () => {
+test("withStorage preserves the default bucket unless an override is configured", () => {
 	const plain = { BUCKET: "r2", DB: "d1" };
 	assert.equal(withStorage(plain), plain);
 	const configured = { BUCKET: "r2", DB: "d1", B2_KEY_ID: "k", B2_APPLICATION_KEY: "s", B2_BUCKET: "b", B2_ENDPOINT: "s3.us-west-004.backblazeb2.com" };
@@ -38,6 +38,25 @@ test("withStorage swaps BUCKET only when B2 is configured", () => {
 	assert.equal(env.DB, "d1");
 	assert.notEqual(env.BUCKET, "r2");
 	assert.equal(withStorage(env), env);
+});
+
+test("Drive storage routes its files separately from mail objects", async () => {
+	const calls = [];
+	const makeBucket = (name) => ({
+		get: (key) => calls.push([name, "get", key]),
+		createMultipartUpload: (key) => calls.push([name, "multipart", key]),
+		delete: (keys) => calls.push([name, "delete", keys]),
+	});
+	const env = withStorage({ BUCKET: makeBucket("mail"), DRIVE_STORAGE: { bucket: makeBucket("drive") } });
+	await env.BUCKET.get("attachment/one");
+	await env.BUCKET.createMultipartUpload("drive/user/file");
+	await env.BUCKET.delete(["drive/user/file", "branding/app-icon"]);
+	assert.deepEqual(calls, [
+		["mail", "get", "attachment/one"],
+		["drive", "multipart", "drive/user/file"],
+		["drive", "delete", ["drive/user/file"]],
+		["mail", "delete", ["branding/app-icon"]],
+	]);
 });
 
 test("B2Bucket speaks S3: put, get, range, head, delete, multipart", async () => {
@@ -50,10 +69,14 @@ test("B2Bucket speaks S3: put, get, range, head, delete, multipart", async () =>
 		const body = Buffer.concat(chunks);
 		const url = new URL(req.url, "http://x");
 		const key = decodeURIComponent(url.pathname.slice(1));
-		requests.push({ method: req.method, key, auth: req.headers.authorization, host: req.headers["x-orig-host"] });
+		requests.push({ method: req.method, key, auth: req.headers.authorization, host: req.headers["x-orig-host"], token: req.headers["x-amz-security-token"], body: body.toString() });
 		const send = (status, payload = "", headers = {}) => { res.writeHead(status, headers); res.end(payload); };
 		if (req.method === "POST" && url.searchParams.has("uploads")) { uploads.set("u1", { parts: new Map(), type: req.headers["content-type"] }); return send(200, "<InitiateMultipartUploadResult><UploadId>u1</UploadId></InitiateMultipartUploadResult>"); }
-		if (req.method === "PUT" && url.searchParams.has("partNumber")) { uploads.get("u1").parts.set(Number(url.searchParams.get("partNumber")), body); return send(200, "", { ETag: `"etag-${url.searchParams.get("partNumber")}"` }); }
+		if (req.method === "PUT" && url.searchParams.has("partNumber")) {
+			uploads.get("u1").parts.set(Number(url.searchParams.get("partNumber")), body);
+			const etag = `etag-${url.searchParams.get("partNumber")}`;
+			return send(200, "", { ETag: key.startsWith("s3/") ? etag : `"${etag}"` });
+		}
 		if (req.method === "POST" && url.searchParams.has("uploadId")) {
 			const parts = [...uploads.get("u1").parts.entries()].sort(([a], [b]) => a - b).map(([, value]) => value);
 			objects.set(key, { body: Buffer.concat(parts), type: uploads.get("u1").type });
@@ -109,6 +132,16 @@ test("B2Bucket speaks S3: put, get, range, head, delete, multipart", async () =>
 		assert.equal(done.size, 5);
 		assert.deepEqual([...Buffer.from(await (await bucket.get("drive/big")).arrayBuffer())], [1, 2, 3, 4, 5]);
 		await bucket.createMultipartUpload("drive/other").then((u) => u.abort());
+
+		const scoped = new B2Bucket({ keyId: "tenant", applicationKey: "anon", bucket: "drive", endpoint: "storage.internal:5000",
+			url: new URL("http://storage.internal:5000/s3"), region: "stub", sessionToken: "test-token" });
+		const scopedUpload = await scoped.createMultipartUpload("drive/user/file");
+		const part = await scopedUpload.uploadPart(1, "part");
+		await scopedUpload.complete([part]);
+		const completion = requests.filter((request) => request.method === "POST").at(-1);
+		assert.equal(completion.key, "s3/drive/drive/user/file");
+		assert.equal(completion.token, "test-token");
+		assert.match(completion.body, /<ETag>etag-1<\/ETag>/);
 	} finally {
 		globalThis.fetch = origFetch;
 		server.close();

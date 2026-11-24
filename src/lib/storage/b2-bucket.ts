@@ -85,13 +85,18 @@ export class B2Bucket {
 	private readonly host: string;
 
 	constructor(private readonly config: B2Config) {
-		this.credentials = { accessKeyId: config.keyId, secretAccessKey: config.applicationKey, region: config.region };
+		this.credentials = { accessKeyId: config.keyId, secretAccessKey: config.applicationKey, region: config.region, sessionToken: config.sessionToken };
 		this.host = `${config.bucket}.${config.endpoint}`;
 	}
 
 	private request(key: string | null, init: { method?: string; query?: Record<string, string>; body?: string | ArrayBuffer; headers?: Record<string, string> } = {}) {
 		if (key !== null) assertPlainKey(key);
-		return awsRequest({ config: this.credentials, service: "s3", host: this.host, path: key === null ? "/" : encodePath(key), ...init });
+		const objectPath = key === null ? "" : encodePath(key);
+		const endpoint = this.config.url;
+		const path = endpoint
+			? `${endpoint.pathname.replace(/\/$/, "")}/${encodeURIComponent(this.config.bucket)}${objectPath}`
+			: objectPath || "/";
+		return awsRequest({ config: this.credentials, service: "s3", host: this.host, origin: endpoint?.origin, path, ...init });
 	}
 
 	private metadataHeaders(options?: PutOptions): Record<string, string> {
@@ -171,12 +176,17 @@ export class B2Bucket {
 			uploadPart: async (partNumber: number, value: PutValue) => {
 				if (!Number.isInteger(partNumber) || partNumber < 1) throw new Error("Invalid part number");
 				const response = await this.request(key, { method: "PUT", query: { partNumber: String(partNumber), uploadId }, body: await toBuffer(value) });
-				return { partNumber, etag: (response.headers.get("etag") ?? "").replace(/"/g, "") };
+				const etag = response.headers.get("etag") ?? "";
+				return { partNumber, etag: this.config.url ? etag : etag.replace(/"/g, "") };
 			},
 			abort: async () => { await this.request(key, { method: "DELETE", query: { uploadId } }); },
 			complete: async (parts: { partNumber: number; etag: string }[]) => {
 				const body = `<CompleteMultipartUpload>${[...parts].sort((a, b) => a.partNumber - b.partNumber)
-					.map((part) => `<Part><PartNumber>${part.partNumber}</PartNumber><ETag>"${escapeXml(part.etag)}"</ETag></Part>`).join("")}</CompleteMultipartUpload>`;
+					.map((part) => {
+						// Some S3-compatible services match the ETag as returned, including any quotes.
+						const etag = this.config.url ? part.etag : `"${part.etag}"`;
+						return `<Part><PartNumber>${part.partNumber}</PartNumber><ETag>${escapeXml(etag)}</ETag></Part>`;
+					}).join("")}</CompleteMultipartUpload>`;
 				const response = await this.request(key, { method: "POST", query: { uploadId }, body, headers: { "Content-Type": "application/xml" } });
 				// A 200 can still carry an <Error> document.
 				const text = await response.text();

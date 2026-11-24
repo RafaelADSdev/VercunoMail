@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import { getDatabaseConfig, withDatabase } from "@/db/with-database";
 import { withStorage } from "@/lib/storage";
 import { openFileBucket } from "./file-bucket";
+import { openDriveStorage } from "./drive-storage";
 import { openMailer, type Mailer, type MailerConfig } from "./mailer";
 import { openAssets, openRateLimiter } from "./misc";
 import { openQueue, type InProcessQueue } from "./queue";
@@ -47,6 +48,7 @@ export function createNodeRuntime(): NodeRuntime {
 	const env = {
 		DB: database,
 		BUCKET: bucket,
+		DRIVE_STORAGE: openDriveStorage(process.env),
 		EMAIL: mailer,
 		SMTP_DKIM_DOMAIN: outbound.kind === "smtp" ? optional("SMTP_DKIM_DOMAIN") : undefined,
 		SMTP_DKIM_SELECTOR: outbound.kind === "smtp" ? optional("SMTP_DKIM_SELECTOR") : undefined,

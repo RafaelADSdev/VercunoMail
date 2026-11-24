@@ -15,6 +15,8 @@ interface CloudflareEnv {
 	SMTP_DKIM_DOMAIN?: string;
 	SMTP_DKIM_SELECTOR?: string;
 	BUCKET: R2Bucket;
+	/** Optional private S3-compatible backend for files stored by Drive. */
+	DRIVE_STORAGE?: { bucket: R2Bucket; maxFileBytes: number };
 	INBOUND_QUEUE: Queue<import("./src/lib/email/inbound").InboundQueueMessage>;
 	AGENT_QUEUE?: Queue<{ kind: "agent.draft"; jobId: string }>;
 	AI?: Ai;

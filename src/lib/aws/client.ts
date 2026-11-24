@@ -32,6 +32,8 @@ export type AwsRequest = {
 	service: string;
 	/** Defaults to `${service}.${region}.amazonaws.com`. */
 	host?: string;
+	/** Explicit origin for compatible services on a private network. */
+	origin?: string;
 	method?: string;
 	path?: string;
 	query?: Record<string, string>;
@@ -44,12 +46,16 @@ export type AwsRequest = {
 export async function awsRequest(request: AwsRequest): Promise<Response> {
 	const { config, service } = request;
 	const region = request.region ?? config.region;
-	const url = new URL(`https://${request.host ?? `${service}.${region}.amazonaws.com`}${request.path ?? "/"}`);
+	const origin = request.origin ?? `https://${request.host ?? `${service}.${region}.amazonaws.com`}`;
+	const url = new URL(request.path ?? "/", origin);
 	for (const [name, value] of Object.entries(request.query ?? {})) url.searchParams.set(name, value);
 	const body = request.body ?? "";
 	const method = request.method ?? "GET";
 	const headers = await signAwsRequest({ method, url, headers: request.headers ?? {}, body, region, service, credentials: config, });
-	const response = await fetch(url, { method, headers, body: method === "GET" || method === "HEAD" ? undefined : body });
+	const response = await fetch(url, {
+		method, headers, body: method === "GET" || method === "HEAD" ? undefined : body,
+		redirect: request.origin ? "error" : undefined,
+	});
 	if (!response.ok) throw await parseError(response);
 	return response;
 }

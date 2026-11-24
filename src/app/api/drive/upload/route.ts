@@ -19,7 +19,8 @@ export async function POST(request: Request) {
 	const size = typeof body.size === "number" && Number.isInteger(body.size) && body.size >= 0 ? body.size : null;
 	const name = normalizeDriveName(body.name) ?? "Untitled";
 	if (size === null) return NextResponse.json({ error: "Invalid file size" }, { status: 400 });
-	if (size > DRIVE_MAX_FILE_BYTES) return NextResponse.json({ error: "File is too large" }, { status: 413 });
+	const maxFileBytes = Math.min(DRIVE_MAX_FILE_BYTES, env.DRIVE_STORAGE?.maxFileBytes ?? DRIVE_MAX_FILE_BYTES);
+	if (size > maxFileBytes) return NextResponse.json({ error: "File is too large" }, { status: 413 });
 
 	let ownerId = user.id;
 	let parentId: string | null = null;
@@ -72,9 +73,9 @@ export async function POST(request: Request) {
 
 	const upload = await env.BUCKET.createMultipartUpload(key, { httpMetadata: { contentType } });
 	row.uploadId = upload.uploadId;
-	row.uploadPartSize = DRIVE_PART_BYTES;
+	row.uploadPartSize = env.DRIVE_STORAGE ? 8 * 1024 * 1024 : DRIVE_PART_BYTES;
 	row.uploadFingerprint = fingerprint || null;
 	try { await db.insert(driveItems).values(row); }
 	catch (error) { await upload.abort(); throw error; }
-	return NextResponse.json({ id, partSize: DRIVE_PART_BYTES, parts: Math.ceil(size / DRIVE_PART_BYTES), uploaded: [] });
+	return NextResponse.json({ id, partSize: row.uploadPartSize, parts: Math.ceil(size / row.uploadPartSize), uploaded: [] });
 }
