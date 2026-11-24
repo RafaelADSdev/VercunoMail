@@ -169,7 +169,7 @@ export async function getDomainDns(
 	env: CloudflareEnv,
 	domain: typeof domains.$inferSelect,
 ): Promise<DomainDnsView> {
-	if (isManualZone(domain.zoneId)) return getManualDomainDns(env, domain.hostname);
+	if (isManualZone(domain.zoneId)) return getManualDomainDns(env, domain.hostname, domain.sendingProvider);
 	// Read the zone's actual sending state rather than trusting `sendingRequested`,
 	// which goes stale when sending is enabled outside Mailflare (or when the row
 	// was written before the subdomain existed). A missing Email Sending permission

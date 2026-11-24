@@ -70,9 +70,8 @@ function spfNames(hostname: string, sendingProvider?: string): string[] {
  * Independently verifies the public DNS a domain needs, rather than trusting
  * the zone records the Cloudflare API reports. MX and DMARC are checked at
  * their canonical names, SPF at the names the sending provider uses; DKIM uses
- * the selector the sending subdomain was provisioned with. A name that
- * resolves is "ok", one that answers NXDOMAIN is "missing", and a lookup that
- * fails outright is "unknown".
+ * the selector configured for the sender. A matching answer is "ok", no
+ * matching answer is "missing", and an unavailable check is "unknown".
  */
 export async function auditDomainDns(
 	hostname: string,
@@ -80,8 +79,7 @@ export async function auditDomainDns(
 	sendingProvider?: string,
 ): Promise<DomainDnsAudit> {
 	const expected = [...view.routing.records, ...view.routing.missing, ...view.sending];
-	// Cloudflare reports the selector it signs with, which is more reliable than
-	// guessing from the subdomain's DNS records (whose names may be relative).
+	// Prefer the sender's selector over inferring it from possibly relative record names.
 	const dkimName =
 		(view.dkimSelector
 			? `${view.dkimSelector}._domainkey.${hostname}`
@@ -96,7 +94,7 @@ export async function auditDomainDns(
 	]);
 
 	const dkim: DnsAuthCheck = dkimName
-		? await check("dkim", "DKIM", dkimName, "TXT", () => true)
+		? await check("dkim", "DKIM", dkimName, "TXT", (value) => /(?:^|;)\s*p\s*=\s*[A-Za-z0-9+/]/.test(value))
 		: {
 				record: "dkim",
 				label: "DKIM",

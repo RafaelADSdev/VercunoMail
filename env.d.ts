@@ -11,6 +11,9 @@ interface CloudflareEnv {
 	/** Hyperdrive binding, used as the connection string when DATABASE_URL is unset. */
 	HYPERDRIVE?: { connectionString: string };
 	EMAIL: SendEmail;
+	/** Public signing domain and selector used by the self-hosted SMTP relay. */
+	SMTP_DKIM_DOMAIN?: string;
+	SMTP_DKIM_SELECTOR?: string;
 	BUCKET: R2Bucket;
 	INBOUND_QUEUE: Queue<import("./src/lib/email/inbound").InboundQueueMessage>;
 	AGENT_QUEUE?: Queue<{ kind: "agent.draft"; jobId: string }>;

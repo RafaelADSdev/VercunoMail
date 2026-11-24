@@ -31,6 +31,7 @@ await build({
 		contents: `
 			export { hasMx, hasMxMatching, isInboundSmtpMx } from "./src/lib/domains/receiving-dns.ts";
 			export { auditDomainDns } from "./src/lib/domains/dns-audit.ts";
+			export { getManualDomainDns } from "./src/lib/domains/manual-dns.ts";
 			export { getResendReceivingView } from "./src/lib/domains/resend-receiving.ts";
 		`,
 		resolveDir: root,
@@ -54,7 +55,7 @@ await build({
 	}],
 	logLevel: "silent",
 });
-const { hasMx, hasMxMatching, isInboundSmtpMx, auditDomainDns, getResendReceivingView } = await import(pathToFileURL(join(bundleDirectory, "entry.mjs")).href);
+const { hasMx, hasMxMatching, isInboundSmtpMx, auditDomainDns, getManualDomainDns, getResendReceivingView } = await import(pathToFileURL(join(bundleDirectory, "entry.mjs")).href);
 rmSync(bundleDirectory, { recursive: true, force: true });
 
 const manualDomain = { hostname: "example.com", zoneId: "manual" };
@@ -140,6 +141,24 @@ test("DKIM for a Resend domain is checked at Resend's selector when nothing else
 	assert.ok(asked.includes("resend._domainkey.example.com"));
 	const other = await auditDomainDns("example.com", emptyView, "none");
 	assert.equal(other.dkim.status, "unknown");
+});
+
+test("a manual zone audits the SMTP relay's DKIM selector for its configured signing domain", async () => {
+	const env = { EMAIL: { configured: true }, SMTP_DKIM_DOMAIN: "example.com", SMTP_DKIM_SELECTOR: "mail2026" };
+	const name = "mail2026._domainkey.example.com";
+	const asked = answerDns({ [`${name}|TXT`]: ['"v=DKIM1; k=rsa; p=ab" "cd"'] });
+	const view = await getManualDomainDns(env, "example.com", "cloudflare");
+	const { dkim } = await auditDomainDns("example.com", view, "cloudflare");
+	assert.equal(dkim.name, name);
+	assert.equal(dkim.status, "ok");
+	assert.ok(asked.includes(name));
+
+	assert.equal((await getManualDomainDns(env, "other.net", "cloudflare")).dkimSelector, undefined);
+	assert.equal((await getManualDomainDns(env, "example.com", "resend")).dkimSelector, undefined);
+	assert.equal((await getManualDomainDns({ ...env, SMTP_DKIM_SELECTOR: "invalid..selector" }, "example.com", "cloudflare")).dkimSelector, undefined);
+
+	answerDns({ [`${name}|TXT`]: ["v=DKIM1; p= ", "unrelated TXT"] });
+	assert.equal((await auditDomainDns("example.com", view, "cloudflare")).dkim.status, "missing");
 });
 
 test("the Resend receiving MX step accepts the published inbound-smtp record", async () => {

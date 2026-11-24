@@ -111,6 +111,11 @@ Postmark, Mailgun, or a Postfix you run. Set
 `SMTP_TLS_REJECT_UNAUTHORIZED=false` only for a relay with a self-signed
 certificate on a private network.
 
+For a manually managed domain, set `SMTP_DKIM_DOMAIN` and `SMTP_DKIM_SELECTOR`
+to match the relay's signing domain and selector. The domain page then checks
+the public TXT record at `<selector>._domainkey.<domain>`. Signing and key
+management remain on the relay.
+
 **Cloudflare Email Sending.** `CF_ACCOUNT_ID` plus a `CF_TOKEN` with Email
 Sending: Edit. The domain must be a Cloudflare zone with Email Sending set
 up; Mailflare calls the REST API, no Workers plan needed.

@@ -36,7 +36,8 @@ export function createNodeRuntime(): NodeRuntime {
 	// DATABASE_URL moves the data to PostgreSQL, MySQL or libSQL; otherwise it lives in a local SQLite file.
 	const database = getDatabaseConfig({}).driver === "d1" ? openSqliteDatabase(join(dataDir, "mailflare.sqlite")) : undefined;
 	const bucket = openFileBucket(join(dataDir, "blobs"));
-	const mailer = openMailer(mailerConfig());
+	const outbound = mailerConfig();
+	const mailer = openMailer(outbound);
 	const inboundQueue = openQueue("mailflare-inbound");
 	const outboundQueue = openQueue("mailflare-outbound");
 	const agentQueue = openQueue("mailflare-agent");
@@ -47,6 +48,8 @@ export function createNodeRuntime(): NodeRuntime {
 		DB: database,
 		BUCKET: bucket,
 		EMAIL: mailer,
+		SMTP_DKIM_DOMAIN: outbound.kind === "smtp" ? optional("SMTP_DKIM_DOMAIN") : undefined,
+		SMTP_DKIM_SELECTOR: outbound.kind === "smtp" ? optional("SMTP_DKIM_SELECTOR") : undefined,
 		INBOUND_QUEUE: inboundQueue,
 		OUTBOUND_QUEUE: outboundQueue,
 		AGENT_QUEUE: agentQueue,
