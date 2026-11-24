@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useBranding } from "@/components/branding-provider";
+import { DEFAULT_APP_NAME } from "@/lib/branding/defaults";
 import { LanguageSelector } from "@/components/language-selector";
 import type { AuthShellProps } from "./types";
 
@@ -27,28 +28,35 @@ export function AuthShell({
 
   return (
     <div className="min-h-dvh bg-[#f1f4fa] pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] text-neutral-900 sm:px-6 sm:py-6 lg:flex lg:items-center lg:px-10 lg:py-10">
-      <main className="mx-auto grid min-h-dvh w-full max-w-4xl grid-rows-[auto_1fr] overflow-hidden bg-white sm:min-h-0 sm:grid-rows-none sm:rounded-4xl lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+      <main className="mx-auto grid min-h-dvh w-full max-w-4xl grid-rows-[auto_1fr] overflow-hidden bg-white dark:bg-[#141414] sm:min-h-0 sm:grid-rows-none sm:rounded-4xl lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
         <section className="flex flex-col p-7 sm:p-10 lg:p-14">
-          <div className="flex items-center gap-2">
-            <span className="flex items-center justify-center overflow-hidden">
-              {iconFailed ? (
-                <Icon className="h-8 w-8 text-blue-600" />
-              ) : (
-                <img
-                  src={iconUrl}
-                  onError={() => {
-                    if (iconUrl !== "/icon-96.png") setIconUrl("/icon-96.png");
-                    else setIconFailed(true);
-                  }}
-                  alt=""
-                  className="h-8 w-8 object-contain"
-                />
-              )}
-            </span>
-            <span className="truncate text-md font-semibold text-neutral-800">
-              {branding.appName}
-            </span>
-          </div>
+          {branding.appName === DEFAULT_APP_NAME && !branding.hasCustomIcon ? (
+            <div className="-ml-3 w-52 max-w-full">
+              <img src="/vercuno/wordmark-light.png" alt={branding.appName} width={2160} height={621} className="h-auto w-full dark:hidden" />
+              <img src="/vercuno/wordmark-dark.png" alt={branding.appName} width={2160} height={621} className="hidden h-auto w-full dark:block" />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="flex items-center justify-center overflow-hidden">
+                {iconFailed ? (
+                  <Icon className="h-8 w-8 text-blue-600" />
+                ) : (
+                  <img
+                    src={iconUrl}
+                    onError={() => {
+                      if (iconUrl !== "/icon-96.png") setIconUrl("/icon-96.png");
+                      else setIconFailed(true);
+                    }}
+                    alt=""
+                    className="h-8 w-8 object-contain"
+                  />
+                )}
+              </span>
+              <span className="truncate text-md font-semibold text-neutral-800">
+                {branding.appName}
+              </span>
+            </div>
+          )}
 
           <div className="mt-10 sm:mt-6 lg:mt-8">
             <h1 className="max-w-md text-3xl font-medium leading-tight tracking-tight text-neutral-950 sm:text-4xl">

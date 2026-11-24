@@ -33,7 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
 	const { appName } = await getHomeBranding();
 	return {
 		title: appName,
-		description: "Multi-tenant email on Cloudflare",
+		description: "Webmail da Vercuno",
 		icons: { icon: "/api/branding/icon", apple: "/apple-touch-icon.png" },
 		appleWebApp: {
 			capable: true,

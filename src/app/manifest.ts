@@ -1,10 +1,11 @@
 import type { MetadataRoute } from "next";
+import { DEFAULT_APP_NAME } from "@/lib/branding/defaults";
 
 export default function manifest(): MetadataRoute.Manifest {
 	return {
-		name: "Mailflare",
-		short_name: "Mailflare",
-		description: "Email, anywhere.",
+		name: DEFAULT_APP_NAME,
+		short_name: DEFAULT_APP_NAME,
+		description: "Webmail da Vercuno.",
 		id: "/",
 		scope: "/",
 		start_url: "/inbox",

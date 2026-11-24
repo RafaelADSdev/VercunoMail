@@ -4,12 +4,17 @@
 
 :root {
 	--color-neutral-500: #6b6b6b;
+	--color-blue-50: #f6effc;
+	--color-blue-100: #eddef9;
+	--color-blue-500: #8752b9;
+	--color-blue-600: #7543a3;
+	--color-blue-700: #633488;
 	--background: #f6f8fc;
 	--foreground: #202124;
 	--card: #ffffff;
 	--muted: #eef3fb;
 	--border: #dadce0;
-	--primary: #0b57d0;
+	--primary: #7543a3;
 	--primary-foreground: #ffffff;
 }
 
@@ -238,7 +243,7 @@ button {
 	--card: #292a2d;
 	--muted: #303134;
 	--border: #3c4043;
-	--primary: #8ab4f8;
+	--primary: #c29be8;
 	--primary-foreground: #202124;
 	--color-white: #292a2d;
 	--color-black: #000;
@@ -297,14 +302,14 @@ button {
 	--color-slate-800: #e8eaed;
 	--color-slate-900: #f1f3f4;
 	--color-slate-950: #ffffff;
-	--color-blue-50: #2c3d57;
-	--color-blue-100: #33486a;
+	--color-blue-50: #372746;
+	--color-blue-100: #49345c;
 	--color-blue-200: oklch(42.4% 0.199 265.638);
 	--color-blue-300: oklch(48.8% 0.243 264.376);
 	--color-blue-400: oklch(54.6% 0.245 262.881);
-	--color-blue-500: oklch(62.3% 0.214 259.815);
-	--color-blue-600: oklch(70.7% 0.165 254.624);
-	--color-blue-700: oklch(80.9% 0.105 251.813);
+	--color-blue-500: #a576d3;
+	--color-blue-600: #c29be8;
+	--color-blue-700: #d4b6f0;
 	--color-blue-800: oklch(88.2% 0.059 254.128);
 	--color-blue-900: oklch(93.2% 0.032 255.585);
 	--color-blue-950: oklch(97% 0.014 254.604);
@@ -481,8 +486,8 @@ button {
 /* Dark chips with white text (tooltip, compose header): the chip turns light, the text turns dark */
 .dark .bg-neutral-900.text-white, .dark .bg-neutral-800.text-white, .dark .bg-neutral-950.text-white { color: var(--color-neutral-50); }
 /* Buttons and highlights with white text keep their original saturated background, not the inverted one */
-.dark .bg-blue-600 { background-color: oklch(54.6% 0.245 262.881); }
-.dark .bg-blue-700, .dark .hover\:bg-blue-700:hover { background-color: oklch(48.8% 0.243 264.376); }
+.dark .bg-blue-600 { background-color: #7543a3; }
+.dark .bg-blue-700, .dark .hover\:bg-blue-700:hover { background-color: #633488; }
 .dark .bg-red-600 { background-color: oklch(57.7% 0.245 27.325); }
 .dark .bg-red-700, .dark .hover\:bg-red-700:hover { background-color: oklch(50.5% 0.213 27.518); }
 .dark .bg-green-600 { background-color: oklch(62.7% 0.194 149.214); }
