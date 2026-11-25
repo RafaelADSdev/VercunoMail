@@ -9,9 +9,14 @@ export type ZipEntrySource = {
 	name: string;
 	/** When the stored file was last modified; defaults to now. */
 	modified?: Date;
-	/** Opens the entry body. Return null to skip the entry (e.g. the object went missing). */
-	open: () => Promise<ReadableStream<Uint8Array> | null> | ReadableStream<Uint8Array> | null;
-};
+} & (
+	| { directory: true }
+	| {
+		directory?: false;
+		/** Opens the entry body. Return null to skip the entry (e.g. the object went missing). */
+		open: () => Promise<ReadableStream<Uint8Array> | null> | ReadableStream<Uint8Array> | null;
+	}
+);
 
 type ZipCentralEntry = {
 	name: Uint8Array;
@@ -21,6 +26,7 @@ type ZipCentralEntry = {
 	flags: number;
 	dosTime: number;
 	dosDate: number;
+	directory: boolean;
 };
 
 // Data descriptor (sizes known only after streaming) plus UTF-8 names.
@@ -61,12 +67,13 @@ function zipEntryName(name: string): string {
 }
 
 /** Duplicate names make archives ambiguous; later copies get a ` (n)` suffix before the extension. */
-export function uniqueZipNames(names: string[]): string[] {
+export function uniqueZipNames(names: string[], caseInsensitive = false): string[] {
 	const taken = new Set<string>();
+	const key = (name: string) => caseInsensitive ? name.toLowerCase() : name;
 	return names.map((name) => {
 		const cleaned = zipEntryName(name);
-		if (!taken.has(cleaned)) {
-			taken.add(cleaned);
+		if (!taken.has(key(cleaned))) {
+			taken.add(key(cleaned));
 			return cleaned;
 		}
 		const dot = cleaned.lastIndexOf(".");
@@ -74,8 +81,8 @@ export function uniqueZipNames(names: string[]): string[] {
 		const extension = dot > 0 ? cleaned.slice(dot) : "";
 		for (let copy = 2; ; copy += 1) {
 			const candidate = `${base} (${copy})${extension}`;
-			if (!taken.has(candidate)) {
-				taken.add(candidate);
+			if (!taken.has(key(candidate))) {
+				taken.add(key(candidate));
 				return candidate;
 			}
 		}
@@ -89,10 +96,11 @@ async function* generateZip(entries: ZipEntrySource[]): AsyncGenerator<Uint8Arra
 	let offset = 0;
 
 	for (let index = 0; index < entries.length; index += 1) {
-		const body = await entries[index].open();
-		if (!body) continue;
-		const name = encoder.encode(names[index]);
-		const { dosTime, dosDate } = toDosDateTime(entries[index].modified ?? new Date());
+		const entry = entries[index];
+		const body = entry.directory ? null : await entry.open();
+		if (!entry.directory && !body) continue;
+		const name = encoder.encode(entry.directory ? `${names[index]}/` : names[index]);
+		const { dosTime, dosDate } = toDosDateTime(entry.modified ?? new Date());
 
 		const local = new DataView(new ArrayBuffer(LOCAL_HEADER_LENGTH));
 		local.setUint32(0, 0x04034b50, true); // local file header signature
@@ -108,19 +116,20 @@ async function* generateZip(entries: ZipEntrySource[]): AsyncGenerator<Uint8Arra
 
 		let crc = 0;
 		let size = 0;
-		const reader = body.getReader();
-		try {
-			for (;;) {
-				const { done, value } = await reader.read();
-				if (done) break;
-				if (!value.byteLength) continue;
-				crc = crc32(value, crc);
-				size += value.byteLength;
-				yield value;
+		if (body) {
+			const reader = body.getReader();
+			try {
+				for (;;) {
+					const { done, value } = await reader.read();
+					if (done) break;
+					if (!value.byteLength) continue;
+					crc = crc32(value, crc);
+					size += value.byteLength;
+					yield value;
+				}
+			} finally {
+				await reader.cancel().catch(() => undefined);
 			}
-		} finally {
-			// Also releases the lock; on a finished body it is a no-op, on early teardown it stops the fetch.
-			await reader.cancel().catch(() => undefined);
 		}
 
 		const descriptor = new DataView(new ArrayBuffer(DATA_DESCRIPTOR_LENGTH));
@@ -130,7 +139,7 @@ async function* generateZip(entries: ZipEntrySource[]): AsyncGenerator<Uint8Arra
 		descriptor.setUint32(12, size, true); // uncompressed size
 		yield new Uint8Array(descriptor.buffer);
 
-		central.push({ name, crc, size, offset, flags: ENTRY_FLAGS, dosTime, dosDate });
+		central.push({ name, crc, size, offset, flags: ENTRY_FLAGS, dosTime, dosDate, directory: !!entry.directory });
 		offset += LOCAL_HEADER_LENGTH + name.byteLength + size + DATA_DESCRIPTOR_LENGTH;
 	}
 
@@ -148,6 +157,7 @@ async function* generateZip(entries: ZipEntrySource[]): AsyncGenerator<Uint8Arra
 		header.setUint32(20, entry.size, true);
 		header.setUint32(24, entry.size, true);
 		header.setUint16(28, entry.name.byteLength, true);
+		if (entry.directory) header.setUint32(38, 0x10, true); // DOS directory attribute
 		header.setUint32(42, entry.offset, true); // offset of the local header
 		yield new Uint8Array(header.buffer);
 		yield entry.name;

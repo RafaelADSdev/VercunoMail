@@ -84,13 +84,14 @@ export async function toDriveItemDtos(db: Db, rows: DriveRow[], userId: string, 
 }
 
 /** Every descendant of the given folders (breadth first), without the roots themselves. */
-export async function collectDriveDescendants(db: Db, rootIds: string[]): Promise<DriveRow[]> {
+export async function collectDriveDescendants(db: Db, rootIds: string[], ownerId?: string): Promise<DriveRow[]> {
 	const found: DriveRow[] = [];
 	let level = rootIds;
 	for (let depth = 0; level.length && depth < DRIVE_MAX_DEPTH; depth += 1) {
 		const next: DriveRow[] = [];
 		for (let index = 0; index < level.length; index += 50) {
-			next.push(...await db.select().from(driveItems).where(inArray(driveItems.parentId, level.slice(index, index + 50))));
+			const parents = inArray(driveItems.parentId, level.slice(index, index + 50));
+			next.push(...await db.select().from(driveItems).where(and(parents, ownerId === undefined ? undefined : eq(driveItems.ownerId, ownerId))));
 		}
 		found.push(...next);
 		level = next.filter((row) => row.kind === "folder").map((row) => row.id);

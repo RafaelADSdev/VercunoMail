@@ -27,7 +27,7 @@ export const MAX_ANCESTOR_LEVELS = 24;
  * MAX_ANCESTOR_LEVELS (deeper folders could not be found again by the file route) under a parent that is `parentDepth` folders deep, is reported in `errors` and skipped.
  */
 export async function ensureImportFolders(db: Db, ownerId: string, parentId: string | null, parentDepth: number, paths: string[][]): Promise<ImportFolderResult> {
-	const result: ImportFolderResult = { folders: {}, errors: {} };
+	const result: ImportFolderResult = { folders: Object.create(null), errors: Object.create(null) };
 	const valid: string[][] = [];
 	for (const path of paths) {
 		const key = path.join("/");

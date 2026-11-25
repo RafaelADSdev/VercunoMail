@@ -16,6 +16,8 @@ await build({
 			export { createSession } from "./src/lib/auth/session.ts";
 			export * as foldersRoute from "./src/app/api/drive/import/folders/route.ts";
 			export * as filesRoute from "./src/app/api/drive/import/files/route.ts";
+			export { GET as download } from "./src/app/api/drive/items/[id]/content/route.ts";
+			export { listZipEntries, openZipEntry } from "./src/lib/import/zip-utils.ts";
 		`,
 		resolveDir: root,
 		sourcefile: "drive-import-routes-entry.ts",
@@ -26,7 +28,7 @@ await build({
 	alias: { "next/headers": "next/headers.js", "next/server": "next/server.js", "cloudflare:workers": "./server/runtime/cloudflare-workers.ts" },
 	logLevel: "silent",
 });
-const { SqliteDatabase, applyMigrations, createSession, foldersRoute, filesRoute } = await import(pathToFileURL(join(directory, "entry.mjs")).href);
+const { SqliteDatabase, applyMigrations, createSession, foldersRoute, filesRoute, download, listZipEntries, openZipEntry } = await import(pathToFileURL(join(directory, "entry.mjs")).href);
 
 async function fixture(t) {
 	const database = new SqliteDatabase(":memory:");
@@ -35,7 +37,11 @@ async function fixture(t) {
 	const sql = database.db;
 	const addUser = sql.prepare("INSERT INTO users (id, email, password_hash, name, role, created_at) VALUES (?, ?, 'hash', ?, 'user', 1)");
 	for (const row of [["owner", "owner@one.test", "Owner"], ["guest", "guest@one.test", "Guest"], ["stranger", "stranger@one.test", "Stranger"]]) addUser.run(...row);
-	const env = { DB: database, MAILFLARE_RUNTIME: "node", CF_TOKEN: "test-only" };
+	const objects = new Map();
+	const env = { DB: database, MAILFLARE_RUNTIME: "node", CF_TOKEN: "test-only", BUCKET: { async get(key) {
+		const bytes = objects.get(key);
+		return bytes === undefined ? null : { size: bytes.length, body: new Response(bytes).body };
+	} } };
 	globalThis.__mailflareNodeEnv = env;
 	t.after(() => { delete globalThis.__mailflareNodeEnv; });
 	const sessions = new Map();
@@ -55,7 +61,10 @@ async function fixture(t) {
 		method: "POST", headers: { Authorization: `Bearer ${sessions.get(actor)}`, "Content-Type": "application/json" }, body: JSON.stringify(body),
 	}));
 	return {
-		sql, counts, addItem,
+		sql, counts, addItem, objects,
+		download: (actor, id) => download(new Request(`https://mail.test/api/drive/items/${id}/content?download=1`, {
+			headers: { Authorization: `Bearer ${sessions.get(actor)}` },
+		}), { params: Promise.resolve({ id }) }),
 		folders: async (actor, body) => { const response = await call(foldersRoute, actor, body); return { status: response.status, data: await response.json() }; },
 		files: async (actor, body) => { const response = await call(filesRoute, actor, body); return { status: response.status, data: await response.json() }; },
 		anonymous: (route) => route.POST(new Request("https://mail.test/api/drive/import", { method: "POST", headers: { Authorization: "Bearer not-a-session" }, body: "{}" })),
@@ -79,6 +88,39 @@ test("folders are created from paths and found again on a repeat", async (t) => 
 	const second = await folders("owner", body);
 	assert.deepEqual(second.data.folders, first.data.folders);
 	assert.equal(rows(sql).length, 4);
+});
+
+test("downloading a shared folder preserves the tree and only includes finished, visible files", async (t) => {
+	const f = await fixture(t);
+	f.addItem("root", "owner", null, "folder", "Kit");
+	f.addItem("logos", "owner", "root", "folder", "Logos");
+	f.addItem("empty", "owner", "root", "folder", "Empty");
+	f.addItem("trash", "owner", "root", "folder", "Trash", { trashedAt: 1 });
+	f.addItem("logo", "owner", "logos", "file", "logo.svg", { size: 3 });
+	f.addItem("pending", "owner", "root", "file", "pending.txt", { uploadId: "in-flight" });
+	f.addItem("hidden", "owner", "trash", "file", "hidden.txt");
+	f.addItem("foreign", "stranger", "root", "file", "foreign.txt");
+	f.objects.set("drive/owner/logo", new TextEncoder().encode("SVG"));
+	f.sql.prepare("INSERT INTO drive_shares (id, item_id, user_id, role, created_at) VALUES ('s1','root','guest','view',1)").run();
+	assert.equal((await f.download("stranger", "root")).status, 404);
+	const response = await f.download("guest", "root");
+	assert.equal(response.status, 200);
+	assert.equal(response.headers.get("Content-Type"), "application/zip");
+	assert.match(response.headers.get("Content-Disposition"), /Kit\.zip/);
+	const blob = await response.blob();
+	const entries = await listZipEntries(blob);
+	assert.deepEqual(entries.map((entry) => entry.name).sort(), ["Kit/", "Kit/Empty/", "Kit/Logos/", "Kit/Logos/logo.svg"]);
+	const file = entries.find((entry) => entry.name.endsWith("logo.svg"));
+	assert.equal(await new Response(await openZipEntry(blob, file)).text(), "SVG");
+});
+
+test("a folder with missing file bytes fails the archive instead of dropping an entry", async (t) => {
+	const f = await fixture(t);
+	f.addItem("root", "owner", null, "folder", "Kit");
+	f.addItem("missing", "owner", "root", "file", "missing.txt", { size: 16 });
+	const response = await f.download("owner", "root");
+	assert.equal(response.status, 200);
+	await assert.rejects(response.arrayBuffer(), /missing|storage/i);
 });
 
 test("an existing folder is reused, the oldest of duplicates, and a trashed one is not", async (t) => {

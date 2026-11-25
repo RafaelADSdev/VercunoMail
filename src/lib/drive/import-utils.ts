@@ -28,6 +28,16 @@ export function folderPrefixes(paths: string[][]): Set<string> {
 	return prefixes;
 }
 
+/** The folders endpoint bounds both paths and distinct ancestors in one request. */
+export function* folderPathBatches(paths: string[][]): Generator<string[][]> {
+	for (let start = 0; start < paths.length;) {
+		let end = start + 1;
+		while (end < paths.length && end - start < 100 && folderPrefixes(paths.slice(start, end + 1)).size <= MAX_IMPORT_FOLDERS) end += 1;
+		yield paths.slice(start, end);
+		start = end;
+	}
+}
+
 /**
  * The folder and file names of a Takeout zip entry under its Drive folder (`prefix`, e.g. ["Takeout", "Drive"]).
  * Entry names are untrusted: they only ever become Drive item names, never paths, but they are still strict. Both

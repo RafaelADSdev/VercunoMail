@@ -1,4 +1,4 @@
-import { contentTypeForName, folderPrefixes, MAX_IMPORT_FOLDERS, NESTED_TOO_DEEPLY } from "../drive/import-utils";
+import { contentTypeForName, folderPathBatches, NESTED_TOO_DEEPLY } from "../drive/import-utils";
 import type { DriveUploadSource } from "@/app/(drive)/drive-upload";
 import type { DriveFile } from "./takeout-data-types";
 import type { DrivePostResult, DriveRunDeps, DriveRunSettings, DriveRunSummary } from "./takeout-drive-types";
@@ -7,7 +7,6 @@ import { createZipPartReader, openZipEntry } from "./zip-utils";
 /** What one files request takes; the route refuses more (it bounds the D1 queries one request makes). */
 const FILES_PER_REQUEST = 140;
 const FOLDERS_PER_FILES_REQUEST = 25;
-const PATHS_PER_FOLDERS_REQUEST = 100;
 const POST_TRIES = 5;
 const RETRY_MS = 2000;
 const MAX_ERRORS_SHOWN = 5;
@@ -74,12 +73,8 @@ export async function importDriveFiles(files: DriveFile[], dirs: { segments: str
 	async function makeFolders(parentId: string | null, paths: string[][]): Promise<{ folders: Record<string, string>; errors: Record<string, string> }> {
 		const folders: Record<string, string> = {};
 		const errors: Record<string, string> = {};
-		for (let start = 0; start < paths.length;) {
-			// At most MAX_IMPORT_FOLDERS distinct folders (every ancestor counted) and PATHS_PER_FOLDERS_REQUEST paths a request; a path always goes alone if it must.
-			let end = start + 1;
-			while (end < paths.length && end - start < PATHS_PER_FOLDERS_REQUEST && folderPrefixes(paths.slice(start, end + 1)).size <= MAX_IMPORT_FOLDERS) end += 1;
-			const { data } = await post("/api/drive/import/folders", { parentId, paths: paths.slice(start, end) });
-			start = end;
+		for (const batch of folderPathBatches(paths)) {
+			const { data } = await post("/api/drive/import/folders", { parentId, paths: batch });
 			Object.assign(folders, data.folders);
 			Object.assign(errors, data.errors);
 		}
@@ -109,7 +104,10 @@ export async function importDriveFiles(files: DriveFile[], dirs: { segments: str
 
 	// Empty folders first, so they exist even when nothing is uploaded into them.
 	const emptyDirs = [...new Map(dirs.map((dir) => [dir.segments.join("/"), dir.segments])).values()];
-	for (let start = 0; start < emptyDirs.length && !stopped(); start += PATHS_PER_FOLDERS_REQUEST) await ensure(emptyDirs.slice(start, start + PATHS_PER_FOLDERS_REQUEST));
+	for (const batch of folderPathBatches(emptyDirs)) {
+		if (stopped()) break;
+		await ensure(batch);
+	}
 
 	let index = 0;
 	while (index < sorted.length) {

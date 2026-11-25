@@ -1,4 +1,5 @@
 export const DRIVE_UPLOAD_EVENT = "mailflare:drive-upload";
+export const DRIVE_FOLDER_UPLOAD_EVENT = "mailflare:drive-folder-upload";
 export const DRIVE_NEW_FOLDER_EVENT = "mailflare:drive-new-folder";
 /** Detail: `DriveStorageDetail`. Sent by the page whenever a listing loads. */
 export const DRIVE_STORAGE_EVENT = "mailflare:drive-storage";

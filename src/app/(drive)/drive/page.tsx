@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { authFetch } from "@/lib/auth/client";
 import { canEditDrive, DRIVE_MAX_FILE_BYTES, formatDriveSize } from "@/lib/drive/utils";
 import type { DriveItemDto } from "@/lib/drive/types";
-import { DRIVE_FOLDERS_EVENT, DRIVE_NEW_FOLDER_EVENT, DRIVE_REFRESH_EVENT, DRIVE_STORAGE_EVENT, DRIVE_UPLOAD_EVENT } from "../drive-events";
+import { DRIVE_FOLDER_UPLOAD_EVENT, DRIVE_FOLDERS_EVENT, DRIVE_NEW_FOLDER_EVENT, DRIVE_REFRESH_EVENT, DRIVE_STORAGE_EVENT, DRIVE_UPLOAD_EVENT } from "../drive-events";
 import { DrivePreviewBody } from "../drive-preview";
 import { DriveShareDialog } from "../drive-share-dialog";
 import { driveFileUrl, driveIconFor, emailUrl, sortDriveItems } from "../drive-utils";
@@ -30,6 +30,7 @@ import { DriveTypeFilter } from "../drive-type-filter";
 import { isDriveCategory } from "@/lib/drive/category-names";
 import type { DriveCategory } from "@/lib/drive/category-names";
 import { uploadDriveFile } from "../drive-upload";
+import { collectDroppedDriveUpload, collectPickedDriveUpload, createDriveUploadFolders, type DriveUploadSelection } from "../drive-folder-upload";
 import type { DriveUploadEntry } from "../drive-upload-types";
 import { DriveUploadPanel } from "../drive-upload-panel";
 import { clearDriveListings, readDriveListing, saveDriveListing } from "../drive-cache";
@@ -69,6 +70,7 @@ export default function DrivePage() {
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 	const selectAllRef = useRef<HTMLInputElement | null>(null);
 	const fileInput = useRef<HTMLInputElement | null>(null);
+	const folderInput = useRef<HTMLInputElement | null>(null);
 	const dragDepth = useRef(0);
 	// Rows being dragged to another folder or the trash, and the folder row under the pointer.
 	const [movingIds, setMovingIds] = useState<Set<string>>(new Set());
@@ -129,20 +131,32 @@ export default function DrivePage() {
 
 	const patchUpload = useCallback((id: string, patch: Partial<DriveUploadEntry>) => setUploads((list) => list.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry))), []);
 
-	const upload = useCallback(async (files: File[]) => {
-		if (!canWrite || !files.length) return;
-		const accepted: { id: string; file: File }[] = [];
-		for (const file of files) {
-			if (file.size > DRIVE_MAX_FILE_BYTES) toast.error(t("drive.tooLarge", { name: file.name, size: formatDriveSize(DRIVE_MAX_FILE_BYTES) }));
-			else accepted.push({ id: `upload-${(uploadSeq.current += 1)}`, file });
+	const upload = useCallback(async (selection: DriveUploadSelection) => {
+		if (!canWrite || (!selection.files.length && !selection.folders.length)) return;
+		let folderIds: Map<string, string>;
+		try {
+			folderIds = await createDriveUploadFolders(folder, selection.folders);
+		} catch {
+			toast.error(t("drive.folderUploadFailed"));
+			await refresh();
+			return;
 		}
+		if (selection.folders.some((path) => !folderIds.has(path.join("/")))) toast.error(t("drive.folderUploadFailed"));
+		const accepted: { id: string; file: File; parentId: string | null }[] = [];
+		for (const { file, parentPath } of selection.files) {
+			const parentId = parentPath.length ? folderIds.get(parentPath.join("/")) : folder;
+			if (parentId === undefined) continue;
+			if (file.size > DRIVE_MAX_FILE_BYTES) toast.error(t("drive.tooLarge", { name: file.name, size: formatDriveSize(DRIVE_MAX_FILE_BYTES) }));
+			else accepted.push({ id: `upload-${(uploadSeq.current += 1)}`, file, parentId });
+		}
+		if (folderIds.size) await refresh();
 		if (!accepted.length) return;
 		setUploads((list) => [...list, ...accepted.map(({ id, file }) => ({ id, name: file.name, percent: 0, resumed: false, status: "queued" as const }))]);
 		let done = 0;
-		for (const { id, file } of accepted) {
+		for (const { id, file, parentId } of accepted) {
 			patchUpload(id, { status: "uploading" });
 			try {
-				await uploadDriveFile(file, folder, (percent, resumed) => patchUpload(id, { percent, resumed }));
+				await uploadDriveFile(file, parentId, (percent, resumed) => patchUpload(id, { percent, resumed }));
 				done += 1;
 				patchUpload(id, { status: "done", percent: 100 });
 			} catch (error) {
@@ -156,10 +170,16 @@ export default function DrivePage() {
 	useEffect(() => { canWriteRef.current = canWrite; }, [canWrite]);
 	useEffect(() => {
 		const onUpload = () => { if (canWriteRef.current) fileInput.current?.click(); };
+		const onFolderUpload = () => { if (canWriteRef.current) folderInput.current?.click(); };
 		const onFolder = () => { if (canWriteRef.current) setNaming({ mode: "create", value: t("drive.untitledFolder") }); };
 		window.addEventListener(DRIVE_UPLOAD_EVENT, onUpload);
+		window.addEventListener(DRIVE_FOLDER_UPLOAD_EVENT, onFolderUpload);
 		window.addEventListener(DRIVE_NEW_FOLDER_EVENT, onFolder);
-		return () => { window.removeEventListener(DRIVE_UPLOAD_EVENT, onUpload); window.removeEventListener(DRIVE_NEW_FOLDER_EVENT, onFolder); };
+		return () => {
+			window.removeEventListener(DRIVE_UPLOAD_EVENT, onUpload);
+			window.removeEventListener(DRIVE_FOLDER_UPLOAD_EVENT, onFolderUpload);
+			window.removeEventListener(DRIVE_NEW_FOLDER_EVENT, onFolder);
+		};
 	}, [t]);
 
 	async function mutate(url: string, init: RequestInit, successMessage?: string) {
@@ -210,7 +230,17 @@ export default function DrivePage() {
 		event.preventDefault();
 		dragDepth.current = 0;
 		setDragging(false);
-		void upload([...event.dataTransfer.files]);
+		void collectDroppedDriveUpload(event.dataTransfer).then(upload).catch(() => toast.error(t("drive.folderReadFailed")));
+	}
+
+	function onUploadPicked(event: React.ChangeEvent<HTMLInputElement>, fromFolder: boolean) {
+		const files = Array.from(event.currentTarget.files ?? []);
+		event.currentTarget.value = "";
+		try {
+			void upload(collectPickedDriveUpload(files, fromFolder));
+		} catch {
+			toast.error(t("drive.folderReadFailed"));
+		}
 	}
 
 	// Dragging a selected row carries the whole selection; any other row goes alone.
@@ -262,7 +292,8 @@ export default function DrivePage() {
 				<HeaderSearch value={search} onChange={setSearch} label={t("drive.search")} onSubmit={() => router.push(search.trim() ? `/drive?q=${encodeURIComponent(search.trim())}` : "/drive")} />,
 				headerTarget,
 			)}
-			<input ref={fileInput} type="file" multiple hidden onChange={(event) => { void upload([...(event.target.files ?? [])]); event.target.value = ""; }} />
+			<input ref={fileInput} type="file" multiple hidden onChange={(event) => onUploadPicked(event, false)} />
+			<input ref={folderInput} type="file" {...{ webkitdirectory: "" }} multiple hidden onChange={(event) => onUploadPicked(event, true)} />
 			<div className="flex min-h-0 flex-1 flex-col rounded-t-3xl bg-white">
 				<div className="flex min-h-[4.25rem] shrink-0 items-center justify-between gap-3 border-b border-neutral-200 px-5 py-3">
 				<div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
@@ -338,6 +369,7 @@ export default function DrivePage() {
 											<DropdownMenu.Content align="end" sideOffset={4} className="z-[200] min-w-52 rounded-xl border border-neutral-200 bg-white p-1.5 shadow-xl">
 												{!item.trashedAt && <DropdownMenu.Item className={menuItemClass} onSelect={() => open(item)}>{t("drive.open")}</DropdownMenu.Item>}
 												{item.kind === "file" && !(item.source && item.trashedAt) && <DropdownMenu.Item asChild className={menuItemClass}><a href={driveFileUrl(item, true)}><Download size={16} />{t("drive.download")}</a></DropdownMenu.Item>}
+												{item.kind === "folder" && !item.trashedAt && <DropdownMenu.Item asChild className={menuItemClass}><a href={driveFileUrl(item, true)}><Download size={16} />{t("drive.downloadFolder")}</a></DropdownMenu.Item>}
 												{item.source && !item.trashedAt && <DropdownMenu.Item asChild className={menuItemClass}><a href={emailUrl(item.source)} target="_blank" rel="noopener noreferrer"><Mail size={16} />{t("drive.openEmail")}<span className="sr-only"> ({t("common.opensInNewTab")})</span></a></DropdownMenu.Item>}
 												{item.role === "owner" && !item.trashedAt && <DropdownMenu.Item className={menuItemClass} onSelect={() => setSharing(item)}><Share2 size={16} />{t("drive.share")}</DropdownMenu.Item>}
 												{canEditDrive(item.role) && !item.trashedAt && <DropdownMenu.Item className={menuItemClass} onSelect={() => setNaming({ mode: "rename", item, value: item.name })}><Pencil size={16} />{t("drive.rename")}</DropdownMenu.Item>}
@@ -353,7 +385,7 @@ export default function DrivePage() {
 						})}
 				</div>
 			</div>
-			{dragging && <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-blue-500 bg-blue-50/80 text-blue-700"><UploadCloud size={28} /><span className="ml-3 text-base font-medium">{t("drive.fileUpload")}</span></div>}
+			{dragging && <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-blue-500 bg-blue-50/80 text-blue-700"><UploadCloud size={28} /><span className="ml-3 text-base font-medium">{t("drive.dropUpload")}</span></div>}
 
 			<Dialog open={!!naming} onOpenChange={(openState) => { if (!openState) setNaming(null); }}>
 				<DialogContent>

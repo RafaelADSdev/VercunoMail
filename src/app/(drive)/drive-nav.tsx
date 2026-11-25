@@ -15,7 +15,7 @@ import { PoweredBy } from "@/components/sidebar-footer";
 import { useSidebar } from "@/components/sidebar-state";
 import { authFetch } from "@/lib/auth/client";
 import { formatDriveSize } from "@/lib/drive/utils";
-import { DRIVE_FOLDERS_EVENT, DRIVE_NEW_FOLDER_EVENT, DRIVE_REFRESH_EVENT, DRIVE_STORAGE_EVENT, DRIVE_UPLOAD_EVENT } from "./drive-events";
+import { DRIVE_FOLDER_UPLOAD_EVENT, DRIVE_FOLDERS_EVENT, DRIVE_NEW_FOLDER_EVENT, DRIVE_REFRESH_EVENT, DRIVE_STORAGE_EVENT, DRIVE_UPLOAD_EVENT } from "./drive-events";
 import type { DriveStorageDetail } from "./drive-events";
 import { canDropDrive, driveDropHandlers } from "./drive-drag";
 import type { DriveDropTarget } from "./drive-drag";
@@ -139,6 +139,7 @@ export function DriveNav({ onNavigate }: { onNavigate?: () => void }) {
 							<DropdownMenu.Item className={itemClass} onSelect={() => { window.dispatchEvent(new Event(DRIVE_NEW_FOLDER_EVENT)); onNavigate?.(); }}><FolderPlus size={18} />{t("drive.newFolder")}</DropdownMenu.Item>
 							<DropdownMenu.Separator className="my-1 h-px bg-neutral-100" />
 							<DropdownMenu.Item className={itemClass} onSelect={() => { window.dispatchEvent(new Event(DRIVE_UPLOAD_EVENT)); onNavigate?.(); }}><UploadCloud size={18} />{t("drive.fileUpload")}</DropdownMenu.Item>
+							<DropdownMenu.Item className={itemClass} onSelect={() => { window.dispatchEvent(new Event(DRIVE_FOLDER_UPLOAD_EVENT)); onNavigate?.(); }}><Folder size={18} />{t("drive.folderUpload")}</DropdownMenu.Item>
 						</DropdownMenu.Content>
 					</DropdownMenu.Portal>
 				</DropdownMenu.Root>
