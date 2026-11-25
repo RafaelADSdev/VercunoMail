@@ -1,135 +1,96 @@
-<img src="public/icon-192.png" alt="Mailflare" width="96" />
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/vercuno-dark.png">
+    <img src="docs/assets/vercuno-light.png" alt="Vercuno" width="360">
+  </picture>
 
+  <h1>Vercuno Mail</h1>
 
-# Mailflare
+  <p>Webmail, agenda e arquivos da equipe em uma instalação que você hospeda.</p>
 
-A self-hosted alternative to Google Workspace. Setup **custom domain Emails**, **Calendar, Drive, Booking** and **built-in AI agents**.
+  <a href="LICENSE"><img alt="Licença AGPL-3.0" src="https://img.shields.io/badge/licen%C3%A7a-AGPL--3.0-7E49B3?style=flat-square"></a>
+  <a href="docs/self-hosting.md"><img alt="Instalação com Docker" src="https://img.shields.io/badge/instala%C3%A7%C3%A3o-Docker-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white"></a>
+  <a href="docs/localization.md"><img alt="Interface em português do Brasil" src="https://img.shields.io/badge/interface-PT--BR-303030?style=flat-square"></a>
 
-Self-host it on Cloudflare or Docker. **Or try [Mailflare Cloud](https://cloud.mailflare.co?ref=github) with high-deliverable emails** from $4​
+  <p>
+    <a href="https://mail.vercuno.com.br/login"><strong>Abrir o webmail</strong></a> ·
+    <a href="#instala%C3%A7%C3%A3o-com-docker">Instalar</a> ·
+    <a href="#arquitetura">Arquitetura</a> ·
+    <a href="#documenta%C3%A7%C3%A3o">Documentação</a>
+  </p>
+</div>
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/hieunc229/mailflare)
+---
 
-## Screenshots
+O **Vercuno Mail** é a edição autohospedada do [Mailflare](https://github.com/hieunc229/mailflare) mantida pela Vercuno. A equipe entra com endereços do próprio domínio, organiza os e-mails em caixas pessoais e pode usar agenda e Drive pelo mesmo navegador.
 
-<table>
-  <tr>
-    <td align="center"><img src="screenshots/1.png" alt="Inbox" width="320"><br>Inbox</td>
-    <td align="center"><img src="screenshots/2.png" alt="Manage domains" width="320"><br>Domains</td>
-    <td align="center"><img src="screenshots/3.png" alt="Manage inboxes" width="320"><br>Mailboxes</td>
-  </tr>
-  <tr>
-    <td align="center"><img src="screenshots/4.png" alt="Calendar" width="320"><br>Calendar</td>
-    <td align="center"><img src="screenshots/5.png" alt="Booking" width="320"><br>Booking</td>
-    <td align="center"><img src="screenshots/6.png" alt="Drive" width="320"><br>Drive</td>
-  </tr>
-</table>
+## O que você pode fazer
 
-## Features
+| Área | Recursos |
+| --- | --- |
+| **E-mail** | Usar caixas pessoais no domínio da equipe, importar mensagens e configurar regras de roteamento. |
+| **Administração** | Gerenciar contas e caixas pelo painel, acompanhar MX, SPF, DKIM e DMARC e editar o nome e o ícone da instalação. |
+| **Drive** | Criar pastas, enviar arquivos em partes com retomada e compartilhar itens com outras contas. |
+| **Agenda e agendamento** | Criar eventos com recorrência e compartilhar um link de agendamento. |
+| **Integrações** | Usar webhooks, chaves de API e conexão opcional com ferramentas via MCP. |
 
-### Apps
+## Arquitetura
 
-- **Email**: Custom domain mailboxes, personal or shared, with access you control. Send and receive with Cloudflare Email, Resend or Amazon SES.
-- **Routing rules**: Store, forward, reject or sort incoming mail, including a one-rule filter for newsletters and promotions.
-- **Calendar**: Repeating events with time zones. Attendees get email invitations.
-- **Booking**: Share a public link so anyone can book a free time on your calendar.
-- **Drive**: Store and share files.
-- **AI agents**: Search mail, draft replies and manage events. Connect other AI tools over MCP.
+Na instalação da Vercuno, o Docker executa o webmail e seu listener SMTP na VPS. O Postfix envia as mensagens, com assinatura do OpenDKIM. Os uploads do Drive usam um bucket privado no Supabase Storage da mesma VPS.
 
-### Technical
-
-- **Databases**: Cloudflare D1 (default), PostgreSQL, MySQL, Turso / libSQL, or a local SQLite file. Set `DATABASE_URL` to switch. Works with Supabase, Neon, PlanetScale, TiDB and more. See [Databases](docs/databases.md).
-- **File storage**: Cloudflare R2, Backblaze B2 or AWS S3.
-- **Hosting**: Cloudflare Workers or a single Docker container.
-- **Admin**: Users, API keys, webhooks, audit logs and backups.
-- **Import**: Bring in mail from IMAP, Gmail Takeout, `.eml` and `.mbox` files, and Google Calendar events, Google Contacts and Google Drive files from Takeout. See [Importing from Google Takeout](docs/import.md).
-
-Mailflare currently supports 34 languages, including English, Português (Brasil), Português (Portugal), Español, Français, Deutsch, Italiano, Nederlands, Polski, Українська, Русский, Türkçe, 中文（简体）, 日本語, 한국어, Bahasa Indonesia, Bahasa Melayu, Tiếng Việt, ไทย, हिन्दी, বাংলা, मराठी, తెలుగు, தமிழ், ગુજરાતી, ಕನ್ನಡ, മലയാളം, ਪੰਜਾਬੀ, සිංහල, Kiswahili, Hausa, plus العربية, اردو and فارسی (right-to-left).
-
-## Cost
-
-You can receive and send mail for free.
-
-- **Receiving**: Cloudflare Email Routing is free.
-- **Sending**: Use the free tier of Resend (3,000 emails a month) or Amazon SES. Cloudflare's own sending needs the $5/month Paid Worker plan.
-
-New Amazon SES accounts start in a sandbox. Ask AWS for production access to lift it. Prices change, so check [Resend](https://resend.com/pricing), [Amazon SES](https://aws.amazon.com/ses/pricing/) and [Cloudflare](https://developers.cloudflare.com/workers/platform/pricing/).
-
-## Deploy
-
-1. **Deploy the app.** Click **Deploy to Cloudflare**. Keep the app name `mailflare`, or it will break.
-2. **Finish setup.** Open the app at `/setup` and create your admin account.
-3. **Connect a domain.** Add a domain from the same Cloudflare account, then create your first mailbox.
-
-> **`CF_TOKEN` is required.** Create a scoped [Cloudflare API token](https://github.com/hieunc229/mailflare/issues/24#issuecomment-5523686105) with these permissions:
->
-> - All accounts: Email Sending:Edit, DNS Settings:Edit, Email Routing Addresses:Edit
-> - All zones: DNS Settings:Edit, Email Routing Rules:Edit, Zone Settings:Edit, DNS:Edit
-
-More options: [deployment guide](docs/deployment.md).
-
-### Deploy with an AI agent
-
-Paste this into an AI agent that has terminal access (Claude Code, Codex, Cursor and similar):
-
-```text
-Install Mailflare for me from https://github.com/hieunc229/mailflare on my Cloudflare account.
-
-1. Read README.md, docs/deployment.md and wrangler.jsonc first.
-2. Ask me for my Cloudflare account ID and two API tokens, using a secret input:
-   a deploy token (for Wrangler) and a runtime token (the Worker secret CF_TOKEN).
-   Never print them, commit them, or pass them as command arguments.
-3. Keep the Worker name exactly "mailflare". Create or reuse the D1 database
-   "mailflare", the R2 bucket "mailflare-raw", and the queues "mailflare-inbound",
-   "mailflare-outbound" and "mailflare-agent".
-4. Install dependencies, run `npm run deploy`, and set CF_TOKEN as a Worker secret.
-   Do not run remote database migrations yourself. The /setup page does that.
-5. Give me the app URL and anything I still need to do. I will open /setup, create
-   the admin account and connect my domain.
+```mermaid
+flowchart LR
+    Usuario["Navegador"] -->|HTTPS| Mail["Vercuno Mail"]
+    Internet["Servidores de e-mail"] -->|SMTP de entrada| Mail
+    Mail -->|SMTP de saída| Postfix["Postfix + OpenDKIM"]
+    Postfix --> Internet
+    Mail --> SQLite[("SQLite")]
+    Mail --> Volume[("Volume de e-mails e anexos")]
+    Mail -->|Uploads do Drive| Storage[("Supabase Storage privado")]
 ```
 
-Token permissions and more options: [deployment guide](docs/deployment.md#deploy-with-an-ai-coding-agent).
+As caixas pessoais e a edição da marca estão disponíveis na edição autohospedada. A listagem administrativa de caixas exibe seus endereços e estados. O acesso às mensagens pessoais exige a conta titular.
 
-### Self-host with Docker
+## Instalação com Docker
 
-Runs as one container on any server, with SQLite and local files.
+Você precisa de Docker com Compose, um domínio para o e-mail e um servidor SMTP de saída. O Compose deste repositório compila a edição Vercuno e usa SQLite e armazenamento local por padrão.
 
 ```bash
+git clone https://github.com/RafaelADSdev/VercunoMail.git
+cd VercunoMail
 cp .env.docker.example .env.docker
+
+# Ajuste .env.docker para usar seu domínio e seu SMTP.
 docker compose up -d --build
+docker compose logs -f mailflare
 ```
 
-Or skip the build and run the prebuilt image: `docker compose -f docker-compose.image.yml up -d`.
+1. Configure `APP_URL` com a URL HTTPS pública, `MAIL_HOSTNAME` com o host SMTP e `SMTP_URL` com o servidor de saída.
+2. Abra `/setup` na URL da instalação e crie o administrador e o domínio.
+3. Configure os registros MX, SPF, DKIM e DMARC do domínio conforme a infraestrutura escolhida. O Compose publica o webmail na porta `3000` e o SMTP de entrada na `25`.
+4. Preserve o volume `mailflare-data` nas atualizações. Para HTTPS, WebSocket e STARTTLS, consulte o [guia de instalação](docs/self-hosting.md).
 
-See [self-hosting](docs/self-hosting.md).
+### Drive no Supabase da própria VPS
 
-## Local development
+Para guardar os uploads do Drive em um serviço S3 compatível, configure as variáveis `DRIVE_S3_*` do [exemplo de ambiente](.env.docker.example). Elas definem endpoint, bucket, região, credenciais e limite por arquivo em bytes. Use um bucket privado e uma credencial restrita a ele. Se já houver arquivos do Drive em outro armazenamento, copie os objetos preservando suas chaves antes da troca.
+
+## Desenvolvimento
 
 ```bash
-cp .dev.vars.example .dev.vars
-npm install
-npm run db:migrate:local
-npm run dev
+npm ci
+node --test tests/b2-bucket.test.mjs tests/manual-dns-checks.test.mjs
 ```
 
-Add your Cloudflare credentials to `.dev.vars`, then open [localhost:3000](http://localhost:3000). Run `npm run db:seed` to load sample data.
+Consulte [como executar sem Docker](docs/self-hosting.md#running-without-docker) para iniciar o servidor Node. Alterações no esquema precisam de migrações para os bancos suportados. [Bancos e migrações](docs/databases.md#migrations).
 
-- `npm run build`: build the Worker
-- `npm run deploy`: build and deploy
-- `npm run lint`: lint and type check
+## Documentação
 
-A schema change needs a migration for each database type. See [Databases](docs/databases.md#migrations).
+- [Instalação, SMTP e ambiente](docs/self-hosting.md)
+- [Entregabilidade e autenticação de domínio](docs/deliverability.md)
+- [API, webhooks e integrações](docs/api.md)
+- [Importação de e-mails, agenda e Drive](docs/import.md)
+- [Segurança](docs/security.md) e [solução de problemas](docs/troubleshooting.md)
 
-## Documentation
+## Créditos e licença
 
-- [Deployment and configuration](docs/deployment.md)
-- [Databases](docs/databases.md)
-- [Sending and receiving providers](docs/providers.md)
-- [API and integrations](docs/api.md)
-- [Email assistant and MCP](docs/email-assistant-and-mcp.md)
-- [Importing from Google Takeout](docs/import.md)
-- [Adding a language](docs/localization.md)
-- [Troubleshooting](docs/troubleshooting.md)
-
-## License
-
-See [LICENSE](LICENSE).
+O **Vercuno Mail** é mantido pela [Vercuno](https://vercuno.com.br) e deriva do [Mailflare, de Hieu Nguyen e colaboradores](https://github.com/hieunc229/mailflare). O código é distribuído sob a [GNU AGPL-3.0](LICENSE). O código-fonte da versão em execução também está disponível no rodapé do webmail.
