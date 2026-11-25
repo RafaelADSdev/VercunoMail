@@ -17,6 +17,7 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
 	variable: "--font-geist-mono",
 	subsets: ["latin"],
+	preload: false,
 });
 
 // Colours are the --background tokens in globals.css (light #f6f8fc, dark #202124).

@@ -29,10 +29,11 @@ export function BrandingProvider({ children, initialBranding }: { children: Reac
 		if (!initialBranding) void fetchBranding().then(applyBranding);
 	}, [initialBranding]);
 
+	const iconUrl = branding.hasCustomIcon ? "/api/branding/icon" : "/icon-96.png";
 	return (
 		<BrandingContext.Provider value={{
 			...branding,
-			iconUrl: branding.hasCustomIcon ? `/api/branding/icon?v=${iconVersion}` : "/icon-96.png",
+			iconUrl: branding.hasCustomIcon && iconVersion ? `${iconUrl}?v=${iconVersion}` : iconUrl,
 			refreshBranding,
 		}}>
 			{children}

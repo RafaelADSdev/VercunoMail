@@ -139,11 +139,10 @@ export function LoadingTransition({ children, ready }: LoadingTransitionProps) {
 				>
 					<span className="sr-only">{loaderVisible ? t("nav.loading") : ""}</span>
 					<div aria-hidden="true" className="flex w-64 flex-col items-center gap-6">
-						<img
-							src={SPLASH_ICON}
-							alt=""
-							className="h-20 w-20 rounded-2xl object-contain"
-						/>
+						<picture>
+							<source type="image/webp" srcSet="/icon-192.webp" />
+							<img src={SPLASH_ICON} alt="" width={80} height={80} className="h-20 w-20 rounded-2xl object-contain" />
+						</picture>
 						<div className="w-full">
 							<div className="h-1.5 overflow-hidden rounded-full bg-blue-100">
 								<div
