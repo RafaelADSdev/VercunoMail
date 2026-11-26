@@ -1,0 +1,223 @@
+/* Styling for the Vercuno Mail webmail inside the Android app. */
+:root {
+  --android-paper: #fff;
+  --android-shell: #f8f5fb;
+  --android-search: #eee7f5;
+  --android-ink: #28212e;
+  --android-muted: #65596e;
+  --android-line: #eae3ee;
+  --android-unread: #f9f3fd;
+  --android-accent: #623393;
+  --android-on-accent: #fff;
+  --android-active: #eee1f9;
+}
+
+:root.dark {
+  --android-paper: #1a161f;
+  --android-shell: #211a29;
+  --android-search: #382c45;
+  --android-ink: #f6edfa;
+  --android-muted: #c5b7ce;
+  --android-line: #382e40;
+  --android-unread: #261d30;
+  --android-accent: #d9b8fc;
+  --android-on-accent: #301444;
+  --android-active: #443150;
+}
+
+@media (max-width: 767px) {
+  .safe-area:has(input[data-mail-search-input]) {
+    background: var(--android-shell);
+  }
+
+  .safe-area header:has(input[data-mail-search-input]) {
+    width: auto;
+    height: 54px;
+    padding: 0 6px;
+    margin: 8px 10px 10px;
+    gap: 3px;
+    border: 1px solid var(--android-line);
+    border-radius: 24px;
+    background: var(--android-search);
+    color: var(--android-ink);
+  }
+
+  header:has(input[data-mail-search-input]) > button[data-mobile-menu] {
+    margin: 0;
+    width: 40px;
+    height: 44px;
+    color: var(--android-ink);
+  }
+
+  header:has(input[data-mail-search-input]) > a[href="/inbox"] {
+    margin: 0;
+    width: 32px;
+    height: 38px;
+  }
+
+  header:has(input[data-mail-search-input]) > a[href="/inbox"] img {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+  }
+
+  header:has(input[data-mail-search-input]) > div:has(> form[role=search]) > button {
+    display: none;
+  }
+
+  header form[role=search]:has(input[data-mail-search-input]) {
+    display: flex;
+    position: static;
+    height: 44px;
+    padding-inline: 4px;
+    gap: 5px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--android-muted);
+  }
+
+  header input[data-mail-search-input] {
+    font-size: 15px;
+    padding-inline: 0;
+    color: var(--android-ink);
+    text-overflow: ellipsis;
+  }
+
+  header input[data-mail-search-input]::placeholder { color: var(--android-muted); }
+  header form[role=search]:has(input[data-mail-search-input]) > svg { width: 18px; height: 18px; }
+  header form[role=search]:has(input[data-mail-search-input]) > button { flex-shrink: 0; }
+  header:has(input[data-mail-search-input]) > button[aria-controls="email-assistant-panel"] { padding-inline: 6px; }
+  header:has(input[data-mail-search-input]) div[class~="w-[360px]"] {
+    width: min(360px, calc(100vw - 24px));
+  }
+  header:has(input[data-mail-search-input]) div[class~="w-56"] { max-width: calc(100vw - 64px); }
+
+  .safe-area:has(input[data-mail-search-input]) #main-content {
+    background: var(--android-paper);
+    border-radius: 18px 18px 0 0;
+  }
+
+  .safe-area:has(input[data-mail-search-input]) > aside {
+    background: var(--android-shell);
+    border-radius: 0 22px 22px 0;
+  }
+
+  #main-content .h-14:has(> .sr-only):has(input[type=checkbox]) {
+    gap: 3px;
+    padding-inline: 14px;
+    border-color: var(--android-line);
+  }
+
+  #main-content .h-14:has(> .sr-only):has(input[type=checkbox]) > div:first-of-type {
+    min-width: 0;
+    gap: 4px;
+  }
+
+  #main-content .h-14:has(> .sr-only):has(input[type=checkbox]) > div:first-of-type p {
+    color: var(--android-ink);
+    font-size: 16px;
+    font-weight: 740;
+    letter-spacing: -.025em;
+  }
+
+  #main-content .h-14:has(> .sr-only):has(input[type=checkbox]) > div:last-child { gap: 0; }
+  #main-content .h-14:has(> .sr-only):has(input[type=checkbox]) button { padding-inline: 7px; }
+  #main-content .h-14:has(> .sr-only):has(input[type=checkbox]) :is(input[type=checkbox], button[aria-pressed="true"]) {
+    accent-color: var(--android-accent);
+  }
+  #main-content .h-14:has(> .sr-only):has(input[type=checkbox]) button[aria-pressed="true"] {
+    background: var(--android-active);
+    color: var(--android-accent);
+  }
+
+  #main-content [role=list]:has([data-android-initials]) > [role=listitem] {
+    border-color: var(--android-line);
+  }
+
+  #main-content [role=list] [data-android-initials] {
+    --avatar-surface: var(--android-active);
+    --avatar-ink: var(--android-accent);
+    grid-template-columns: 42px minmax(0, 1fr);
+    min-height: 79px;
+    gap: 12px;
+    padding: 10px 14px 10px 12px;
+    border-inline-start: 3px solid transparent;
+    color: var(--android-ink);
+    background: var(--android-paper);
+  }
+  #main-content [role=list] [data-android-unread] { background: var(--android-unread); border-inline-start-color: var(--android-accent); }
+  #main-content [role=list] [data-android-initials]:has(> input:checked),
+  #main-content [role=list] [data-android-initials]:has(> a[aria-current=true]) { background: var(--android-active); }
+  [data-android-initials][data-android-tone="1"] { --avatar-surface: #dceee9 !important; --avatar-ink: #19574a !important; }
+  [data-android-initials][data-android-tone="2"] { --avatar-surface: #f5e6d7 !important; --avatar-ink: #734714 !important; }
+  [data-android-initials][data-android-tone="3"] { --avatar-surface: #dfe8fc !important; --avatar-ink: #354b83 !important; }
+  [data-android-initials][data-android-tone="4"] { --avatar-surface: #f8e1eb !important; --avatar-ink: #842e55 !important; }
+
+  #main-content [data-android-initials] > input[type=checkbox] {
+    width: 42px;
+    height: 42px;
+    margin: 1px 0 0;
+    border-radius: 50%;
+    accent-color: var(--android-accent);
+  }
+
+  #main-content [data-android-initials] > input:not(:checked) { opacity: 0; }
+  #main-content [data-android-initials]:has(> input:not(:checked))::before {
+    content: attr(data-android-initials) / "";
+    position: absolute;
+    top: 11px;
+    inset-inline-start: 12px;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    pointer-events: none;
+    background: var(--avatar-surface);
+    color: var(--avatar-ink);
+    font-size: 13px;
+    font-weight: 760;
+  }
+
+  #main-content [data-android-initials]:has(> input:focus-visible)::before {
+    outline: 2px solid var(--android-accent);
+    outline-offset: 1px;
+  }
+  #main-content [data-android-initials] > a > span:first-child > span:first-child { font-size: 15px; }
+  #main-content [data-android-initials] > a > span:nth-child(2) { margin-top: 2px; }
+  #main-content [data-android-initials] > a > span:nth-child(3) { color: var(--android-muted); }
+
+  .safe-area:has(input[data-mail-search-input]) > button.fixed[class~="z-30"][class~="md:hidden"] {
+    height: 54px;
+    padding-inline: 18px;
+    gap: 9px;
+    border-radius: 17px;
+    background: var(--android-accent);
+    color: var(--android-on-accent);
+    font-size: 14px;
+    font-weight: 720;
+    box-shadow: 0 4px 13px #260d3a2e;
+  }
+  .safe-area:has(input[data-mail-search-input]) > button.fixed[class~="z-30"][class~="md:hidden"]:active {
+    filter: brightness(.91);
+  }
+
+  [data-compose-surface] > div[class~="max-md:touch-none"] {
+    height: 54px;
+    background: var(--android-shell);
+    color: var(--android-ink);
+    border-bottom: 1px solid var(--android-line);
+  }
+  [data-compose-surface] > div[class~="max-md:touch-none"] > div { color: var(--android-ink); }
+  [data-compose-surface] > div[class~="max-md:touch-none"] > div > button:hover {
+    background: var(--android-search);
+    color: var(--android-ink);
+  }
+}
+
+@media (max-width: 360px) {
+  header:has(input[data-mail-search-input]) > a[href="/inbox"] { width: 25px; }
+  header:has(input[data-mail-search-input]) > a[href="/inbox"] img { width: 20px; height: 20px; }
+  header form[role=search]:has(input[data-mail-search-input]) > svg { display: none; }
+  #main-content .h-14:has(> .sr-only):has(input[type=checkbox]) { padding-inline: 10px; }
+}

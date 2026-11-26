@@ -28,34 +28,22 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.Arrays;
-import java.util.Map;
 
 public final class MailActivity extends Activity {
     static final String HOST = "mail.vercuno.com.br";
     static final String ORIGIN = "https://" + HOST;
-    static final String APP_PATH = "/__vercuno_android__/";
-    static final String HOME = ORIGIN + APP_PATH;
+    static final String HOME = ORIGIN + "/inbox";
     private static final int FILE_PICKER = 1;
-    private static final Map<String, String> ASSETS = Map.of(
-        "", "text/html", "mail.css", "text/css", "mail.js", "text/javascript",
-        "compose.js", "text/javascript", "ui.js", "text/javascript", "brand.webp", "image/webp"
-    );
-    private static final String CSP = "default-src 'none'; script-src 'self'; style-src 'self'; "
-        + "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+    private static final String WEB_STATE = "vercuno-webmail-state";
 
     private WebView web;
     private LinearLayout root;
-    private Button webBack;
     private ProgressBar progress;
     private LinearLayout failure;
     private ValueCallback<Uri[]> fileCallback;
     private AttachmentDownloads downloads;
-    private boolean returningFromLogin;
-    private boolean clearLoginHistory;
+    private WebmailAppearance appearance;
     private String failedUrl;
 
     @Override
@@ -63,12 +51,14 @@ public final class MailActivity extends Activity {
         super.onCreate(state);
         getWindow().setDecorFitsSystemWindows(false);
         downloads = new AttachmentDownloads(this);
+        appearance = new WebmailAppearance(getAssets());
         setupViews();
         setupWebView();
         if (Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(0, this::goBack);
         }
-        if (state == null || web.restoreState(state) == null) openHome();
+        Bundle webState = state == null ? null : state.getBundle(WEB_STATE);
+        if (webState == null || web.restoreState(webState) == null) openHome();
     }
 
     private void setupViews() {
@@ -80,15 +70,6 @@ public final class MailActivity extends Activity {
             view.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, keyboard.bottom));
             return WindowInsets.CONSUMED;
         });
-
-        webBack = new Button(this, null, android.R.attr.borderlessButtonStyle);
-        webBack.setText(R.string.back_to_inbox);
-        webBack.setAllCaps(false);
-        webBack.setGravity(android.view.Gravity.CENTER_VERTICAL | android.view.Gravity.START);
-        webBack.setMinHeight(dp(48));
-        webBack.setOnClickListener(view -> openHome());
-        webBack.setVisibility(View.GONE);
-        root.addView(webBack, -1, -2);
 
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         root.addView(progress, -1, dp(2));
@@ -122,7 +103,6 @@ public final class MailActivity extends Activity {
         int foreground = Color.parseColor(dark ? "#E9D8FC" : "#623393");
         root.setBackgroundColor(background);
         web.setBackgroundColor(background);
-        webBack.setTextColor(foreground);
         ((TextView) failure.getChildAt(0)).setTextColor(foreground);
         ((Button) failure.getChildAt(1)).setTextColor(foreground);
         getWindow().setStatusBarColor(Color.TRANSPARENT);
@@ -154,8 +134,7 @@ public final class MailActivity extends Activity {
             @Override
             public void onProgressChanged(WebView view, int percent) {
                 progress.setProgress(percent);
-                progress.setVisibility(percent < 100 && failure.getVisibility() != View.VISIBLE
-                    && !isApp(view.getUrl()) ? View.VISIBLE : View.GONE);
+                progress.setVisibility(percent < 100 && failure.getVisibility() != View.VISIBLE ? View.VISIBLE : View.GONE);
             }
 
             @Override
@@ -186,31 +165,6 @@ public final class MailActivity extends Activity {
 
     private final class MailClient extends WebViewClient {
         @Override
-        public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-            Uri url = request.getUrl();
-            if (!trusted(url)) return null;
-            String path = url.getEncodedPath();
-            // The app supplies its own offline screen and must receive local
-            // navigation requests before the website's service worker.
-            if ("/sw.js".equals(path)) return missingAsset();
-            if (!path.startsWith(APP_PATH) || !"GET".equals(request.getMethod())) return null;
-            String asset = path.substring(APP_PATH.length());
-            String mime = ASSETS.get(asset);
-            if (mime == null) return missingAsset();
-            try {
-                InputStream stream = getAssets().open("mail/" + (asset.isEmpty() ? "index.html" : asset));
-                return new WebResourceResponse(mime, "UTF-8", 200, "OK", Map.of(
-                    "Content-Security-Policy", CSP,
-                    "Cache-Control", "no-store",
-                    "X-Content-Type-Options", "nosniff",
-                    "Referrer-Policy", "same-origin"
-                ), stream);
-            } catch (IOException ex) {
-                return missingAsset();
-            }
-        }
-
-        @Override
         public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             if (!request.isForMainFrame()) return false;
             Uri uri = request.getUrl();
@@ -218,17 +172,7 @@ public final class MailActivity extends Activity {
                 openExternal(uri);
                 return true;
             }
-            return replaceLoginRedirect(uri);
-        }
-
-        @Override
-        public void doUpdateVisitedHistory(WebView view, String url, boolean reload) {
-            Uri uri = parse(url);
-            if (!trusted(uri)) return;
-            String path = uri.getPath();
-            if (isAuth(path)) returningFromLogin = true;
-            if (replaceLoginRedirect(uri)) return;
-            webBack.setVisibility(!isApp(url) && !isAuth(path) ? View.VISIBLE : View.GONE);
+            return false;
         }
 
         @Override
@@ -242,12 +186,14 @@ public final class MailActivity extends Activity {
         }
 
         @Override
+        public void onPageCommitVisible(WebView view, String url) {
+            if (trusted(parse(url))) appearance.apply(view);
+        }
+
+        @Override
         public void onPageFinished(WebView view, String url) {
             CookieManager.getInstance().flush();
-            if (clearLoginHistory && isApp(url)) {
-                view.clearHistory();
-                clearLoginHistory = false;
-            }
+            if (trusted(parse(url))) appearance.apply(view);
         }
 
         @Override
@@ -259,14 +205,6 @@ public final class MailActivity extends Activity {
         public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
             if (request.isForMainFrame() && response.getStatusCode() >= 500) showFailure(request.getUrl());
         }
-    }
-
-    private boolean replaceLoginRedirect(Uri url) {
-        if (!returningFromLogin || !"/inbox".equals(url.getPath()) || url.getQuery() != null) return false;
-        returningFromLogin = false;
-        clearLoginHistory = true;
-        web.post(this::openHome);
-        return true;
     }
 
     private void showFailure(Uri uri) {
@@ -287,14 +225,12 @@ public final class MailActivity extends Activity {
     private void goBack() {
         if (failure.getVisibility() == View.VISIBLE) {
             openHome();
-        } else if (isApp(web.getUrl())) {
-            web.evaluateJavascript("Boolean(window.mailBack && window.mailBack())", handled -> {
-                if (!"true".equals(handled)) finish();
-            });
-        } else if (web.canGoBack()) {
-            web.goBack();
         } else {
-            finish();
+            web.evaluateJavascript("Boolean(window.vercunoAndroid?.back())", handled -> {
+                if ("true".equals(handled)) return;
+                if (web.canGoBack()) web.goBack();
+                else finish();
+            });
         }
     }
 
@@ -308,7 +244,9 @@ public final class MailActivity extends Activity {
     @Override
     protected void onSaveInstanceState(Bundle state) {
         super.onSaveInstanceState(state);
-        web.saveState(state);
+        Bundle webState = new Bundle();
+        web.saveState(webState);
+        state.putBundle(WEB_STATE, webState);
     }
 
     @Override
@@ -338,12 +276,6 @@ public final class MailActivity extends Activity {
         }
     }
 
-    private static WebResourceResponse missingAsset() {
-        return new WebResourceResponse("text/plain", "UTF-8", 404, "Not Found", Map.of(
-            "Cache-Control", "no-store"
-        ), new ByteArrayInputStream(new byte[0]));
-    }
-
     static Uri parse(String url) {
         return url == null ? Uri.EMPTY : Uri.parse(url);
     }
@@ -351,17 +283,6 @@ public final class MailActivity extends Activity {
     static boolean trusted(Uri uri) {
         return "https".equals(uri.getScheme())
             && (HOST.equalsIgnoreCase(uri.getEncodedAuthority()) || (HOST + ":443").equalsIgnoreCase(uri.getEncodedAuthority()));
-    }
-
-    private static boolean isApp(String url) {
-        Uri uri = parse(url);
-        return trusted(uri) && APP_PATH.equals(uri.getPath());
-    }
-
-    private static boolean isAuth(String path) {
-        return path != null && (path.equals("/login") || path.equals("/setup") || path.equals("/onboarding")
-            || path.startsWith("/forgot-password") || path.startsWith("/reset-password")
-            || path.startsWith("/passkey-setup") || path.startsWith("/register"));
     }
 
     private int dp(int value) {

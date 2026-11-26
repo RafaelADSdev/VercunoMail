@@ -13,14 +13,17 @@ import java.io.OutputStream;
 import java.net.URL;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.net.ssl.HttpsURLConnection;
 
 final class AttachmentDownloads {
     static final int SAVE_REQUEST = 2;
     private static final Pattern DOWNLOAD_PATH = Pattern.compile(
-        "/api/messages/[^/]+/(?:attachments/[^/]+|attachments\\.zip|original)"
+        "/api/(?:messages/[^/]+/(?:attachments/[^/]+|attachments\\.zip|original)"
+            + "|drive/(?:(?:items|attachments)/[^/]+/content|public/[^/]+))"
     );
+    private static final Pattern ORIGINAL_PATH = Pattern.compile("/api/messages/([a-zA-Z0-9_-]+)/original");
     private static final ExecutorService IO = Executors.newSingleThreadExecutor();
 
     private final MailActivity activity;
@@ -34,10 +37,12 @@ final class AttachmentDownloads {
         Uri uri = MailActivity.parse(url);
         String path = uri.getEncodedPath();
         if (!MailActivity.trusted(uri) || path == null || !DOWNLOAD_PATH.matcher(path).matches()) {
-            activity.toast("Use o botão de download do anexo na mensagem.");
+            activity.toast("Não foi possível salvar este arquivo.");
             return;
         }
         if (pendingUrl != null) return;
+        Matcher original = ORIGINAL_PATH.matcher(path);
+        if (original.matches()) filename = "original-" + original.group(1) + ".eml";
         Intent picker = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         picker.addCategory(Intent.CATEGORY_OPENABLE);
         picker.setType("application/octet-stream");
@@ -84,14 +89,14 @@ final class AttachmentDownloads {
             }
             long expected = connection.getContentLengthLong();
             if (expected >= 0 && copied != expected) throw new IOException("Incomplete attachment");
-            feedback = "Anexo salvo.";
+            feedback = "Arquivo salvo.";
         } catch (IOException | SecurityException ex) {
             try {
                 DocumentsContract.deleteDocument(activity.getContentResolver(), destination);
             } catch (IOException | RuntimeException ignored) {
                 // The chosen document provider may not support deletion.
             }
-            feedback = "Não foi possível salvar o anexo. Abra a mensagem e tente novamente.";
+            feedback = "Não foi possível salvar o arquivo. Tente novamente.";
         } finally {
             if (connection != null) connection.disconnect();
         }

@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Vercuno Mail</string>
-    <string name="back_to_inbox">‹  Caixa de entrada</string>
     <string name="connection_failed">Não foi possível abrir o Vercuno Mail. Verifique a conexão e tente novamente.</string>
     <string name="retry">Tentar novamente</string>
     <style name="Theme.VercunoMail" parent="android:style/Theme.Material.Light.NoActionBar">
